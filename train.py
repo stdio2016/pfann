@@ -60,6 +60,9 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
 
 def test_train():
     torch.manual_seed(123)
+    torch.cuda.manual_seed(123)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
     d = 128
     h = 1024
     u = 32
