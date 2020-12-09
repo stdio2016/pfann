@@ -4,13 +4,17 @@ import tqdm
 from pathlib import Path
 import time
 from simpleutils import get_hash
-from datautil.audio import get_audio
 
 import torch
 import torch.multiprocessing as mp
 import numpy as np
 import miniaudio
-import torchaudio
+import warnings
+# torchaudio currently (0.7) will throw warning that cannot be disabled
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import torchaudio
+from datautil.audio import get_audio
 torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
 
 class MyDataset(torch.utils.data.Dataset):
@@ -90,6 +94,15 @@ class MyDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.files)
 
+def preloader_func(dir, que):
+    while True:
+        file = que.get()
+        if file == '':
+            break
+        if (dir/file).exists():
+            with open(dir / file, 'rb') as fin:
+                preloaded = fin.read()
+
 class MySampler(torch.utils.data.Sampler):
     def __init__(self, data_source, chunk_size):
         self.data_source = data_source
@@ -97,13 +110,35 @@ class MySampler(torch.utils.data.Sampler):
         self.generator = torch.Generator()
         self.generator2 = torch.Generator()
     def __iter__(self):
+        que = mp.Manager().Queue()
+        preloader = mp.Process(target=preloader_func, args=(self.data_source.cache_dir, que,))
         n = len(self.data_source)
         bs = self.chunk_size
         n_chunks = (n-1) // bs + 1
+        preloader.start()
         shuffled = torch.randperm(n_chunks, generator=self.generator).tolist()
-        for i in shuffled:
-            size = min(bs, n - i*bs)
-            yield from (torch.randperm(size, generator=self.generator2) + i*bs).tolist()
+        # send file names to preloader
+        which = set()
+        i = shuffled[0]
+        for j in range(i*bs, min((i+1)*bs, n)):
+            file = self.data_source.files[j]
+            if file['hash'] not in which:
+                which.add(file['hash'])
+                que.put(file['hash'])
+        for i in range(len(shuffled)):
+            start = shuffled[i] * bs
+            size = min(bs, n - start)
+            if i+1 < len(shuffled):
+                # send file names to preloader
+                for j in range(shuffled[i+1]*bs, min((shuffled[i+1]+1)*bs, n)):
+                    file = self.data_source.files[j]
+                    if file['hash'] not in which:
+                        which.add(file['hash'])
+                        que.put(file['hash'])
+            yield from (start + torch.randperm(size, generator=self.generator2)).tolist()
+        # stop preloader
+        que.put('')
+        preloader.join()
     def __len__(self):
         return len(self.data_source)
 
@@ -118,5 +153,7 @@ if __name__ == '__main__':
     sampler = MySampler(dataset, 20000)
     loader = torch.utils.data.DataLoader(dataset, num_workers=6, sampler=sampler, batch_size=320)
     
-    for i in tqdm.tqdm(loader):
-        pass
+    print('test dataloader for training data')
+    for epoch in range(3):
+        for i in tqdm.tqdm(loader):
+            pass
