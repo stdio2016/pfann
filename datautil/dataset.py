@@ -1,15 +1,17 @@
 import argparse
 import csv
-import tqdm
 from pathlib import Path
 import time
+import os
+import warnings
+
+import tqdm
 from simpleutils import get_hash
 
 import torch
 import torch.multiprocessing as mp
 import numpy as np
 import miniaudio
-import warnings
 # torchaudio currently (0.7) will throw warning that cannot be disabled
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -33,6 +35,7 @@ class MyDataset(torch.utils.data.Dataset):
             hash = get_hash(name)
             du = float(file['duration'])
             t = 0
+            # remove "lock" files
             if (self.cache_dir / (hash+'_')).exists():
                 (self.cache_dir / (hash+'_')).unlink()
             while t + clip_size <= du:
@@ -43,29 +46,17 @@ class MyDataset(torch.utils.data.Dataset):
                     'hash': hash
                 })
                 t += hop_size
-    def __getitem__(self, index):
-        #print('I am %d and I have %d' % (os.getpid(), index))
-        file = self.files[index]
-        hash = file['hash']
-        t_start = int(file['start'] * self.sample_rate)
-        t_duration = int(self.clip_size * self.sample_rate)
-        # wait for other workers to finish
-        if (self.cache_dir / (hash+'_')).exists():
-            while not (self.cache_dir / hash).exists():
-                time.sleep(0.1)
-        if (self.cache_dir / hash).exists():
-            # cache hit!
-            with open(self.cache_dir / hash, 'rb') as fin:
-                fin.seek(t_start * 2)
-                code = fin.read(t_duration * 2)
-            # int16 to float32
-            wave = np.frombuffer(code, dtype=np.int16).astype(np.float32)
-            wave /= 32768
-            return torch.FloatTensor(wave.reshape([1, -1]))
-        with open(self.cache_dir / (hash+'_'), 'wb') as unfinished_file:
-            pass
-        
-        name = file['file']
+    
+    def load_from_cache(self, hash, frame_offset, num_frames):
+        with open(self.cache_dir / hash, 'rb') as fin:
+            fin.seek(frame_offset * 2)
+            code = fin.read(num_frames * 2)
+        # int16 to float32
+        wave = np.frombuffer(code, dtype=np.int16).astype(np.float32)
+        wave /= 32768
+        return torch.FloatTensor(wave.reshape([1, -1]))
+    
+    def load_from_hdd(self, name, hash):
         wave, smpRate = get_audio(name)
         wave = torch.FloatTensor(wave)
         # stereo to mono
@@ -76,20 +67,42 @@ class MyDataset(torch.utils.data.Dataset):
         saves = wave.numpy()
         # float32 to int16
         saves = np.clip(saves * 32768, -32768, 32767).astype(np.int16)
-        saves.tofile(self.cache_dir / (hash+'_'))
+        # save to temporary location
+        tmppath = self.cache_dir / ('_'+str(os.getpid()))
+        saves.tofile(tmppath)
         # save to cache
         try:
-            (self.cache_dir / (hash+'_')).rename(self.cache_dir / hash)
+            tmppath.rename(self.cache_dir / hash)
         except FileExistsError: # can only happen on Windows
-            try:
-                (self.cache_dir / (hash+'_')).unlink()
-            except (PermissionError, FileNotFoundError):
-                pass
+            tmppath.unlink()
         except PermissionError: # can only happen on Windows
             pass
-        except FileNotFoundError:
+        return torch.FloatTensor(saves) / 32768
+    
+    def __getitem__(self, index):
+        #print('I am %d and I have %d' % (os.getpid(), index))
+        file = self.files[index]
+        hash = file['hash']
+        t_start = int(file['start'] * self.sample_rate)
+        t_duration = int(self.clip_size * self.sample_rate)
+        lock_file = self.cache_dir / (hash+'_')
+        # wait for other workers to finish
+        if lock_file.exists():
+            while not (self.cache_dir / hash).exists():
+                time.sleep(0.01)
+        if (self.cache_dir / hash).exists():
+            # cache hit!
+            return self.load_from_cache(hash, t_start, t_duration)
+        # create "lock" file
+        with open(lock_file, 'wb'):
             pass
-        wave = torch.FloatTensor(saves) / 32768
+        
+        name = file['file']
+        wave = self.load_from_hdd(name, hash)
+        try:
+            lock_file.unlink()
+        except (PermissionError, FileNotFoundError):
+            pass
         return wave[:, t_start:t_start+t_duration]
     def __len__(self):
         return len(self.files)
@@ -146,12 +159,13 @@ if __name__ == '__main__':
     argp = argparse.ArgumentParser()
     argp.add_argument('--csv', required=True)
     argp.add_argument('--cache-dir', default='caches')
+    argp.add_argument('--workers', type=int, default=0)
     args = argp.parse_args()
     
     mp.set_start_method('spawn')
     dataset = MyDataset(args.csv, cache_dir=args.cache_dir)
     sampler = MySampler(dataset, 20000)
-    loader = torch.utils.data.DataLoader(dataset, num_workers=6, sampler=sampler, batch_size=320)
+    loader = torch.utils.data.DataLoader(dataset, num_workers=args.workers, sampler=sampler, batch_size=320)
     
     print('test dataloader for training data')
     for epoch in range(3):
