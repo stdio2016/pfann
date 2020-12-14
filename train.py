@@ -1,8 +1,9 @@
 import numpy as np
-from tqdm import trange
+from tqdm import tqdm
 import torch
 from model import FpNetwork
 from datautil.mock_data import make_false_data
+from torch.utils.data import DataLoader
 
 def similarity_loss(y, tau):
     a = torch.matmul(y, y.T)
@@ -18,17 +19,18 @@ def similarity_loss(y, tau):
     return loss
 
 def train(model, optimizer, train_data, val_data, batch_size, device):
-    data_N = train_data.shape[0]
-    validate_N = val_data.shape[0]
+    train_data = DataLoader(train_data, batch_size=batch_size//2, shuffle=True)
+    validate_N = val_data.shape[0] * 2
+    val_data = DataLoader(val_data, batch_size=batch_size//2)
     for epoch in range(100):
         model.train()
         tau = 0.05
         print('epoch %d' % (epoch+1))
         losses = []
-        for batch_idx in trange((data_N-1)//batch_size+1):
+        for x in tqdm(train_data):
             optimizer.zero_grad()
         
-            x = train_data[batch_size*batch_idx:batch_size*(batch_idx+1)].to(device)
+            x = x.reshape((-1,) + x.shape[2:4]).to(device)
             y = model(x)
             loss = similarity_loss(y, tau)
             loss.backward()
@@ -40,20 +42,20 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
         model.eval()
         with torch.no_grad():
             x_embed = []
-            for batch_idx in trange((data_N-1)//batch_size+1):
-                x = train_data[batch_size*batch_idx:batch_size*(batch_idx+1)].to(device)
+            for x in tqdm(train_data):
+                x = x.reshape((-1,) + x.shape[2:4]).to(device)
                 y = model(x).cpu()
                 x_embed.append(y)
             x_embed = torch.cat(x_embed)
             acc = 0
-            for batch_idx in trange((validate_N-1)//batch_size+1):
-                x = val_data[batch_size*batch_idx:batch_size*(batch_idx+1)].to(device)
+            for x in tqdm(val_data):
+                x = x.reshape((-1,) + x.shape[2:4]).to(device)
                 y_embed = model(x).cpu()
                 A = torch.matmul(y_embed, torch.cat([x_embed, y_embed]).T)
                 ans = torch.topk(A, 2, dim=1)
                 for i in range(y_embed.shape[0]):
                     part = i+1 if i%2==0 else i-1
-                    part += data_N
+                    part += x_embed.shape[0]
                     if ans.indices[i,1] == part:
                         acc += 1
             print('validate score: %f' % (acc / validate_N))
@@ -68,7 +70,7 @@ def test_train():
     u = 32
     F_bin = 256
     T = 32
-    N = 320
+    N = 40
     data_N = 2000
     validate_N = 160
     device = torch.device('cuda')
