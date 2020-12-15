@@ -19,9 +19,10 @@ def similarity_loss(y, tau):
     return loss
 
 def train(model, optimizer, train_data, val_data, batch_size, device):
+    minibatch = 40
     train_data = DataLoader(train_data, batch_size=batch_size//2, shuffle=True)
     validate_N = val_data.shape[0] * 2
-    val_data = DataLoader(val_data, batch_size=batch_size//2)
+    val_data = DataLoader(val_data, batch_size=minibatch//2)
     for epoch in range(100):
         model.train()
         tau = 0.05
@@ -30,11 +31,27 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
         for x in tqdm(train_data):
             optimizer.zero_grad()
         
-            x = x.reshape((-1,) + x.shape[2:4]).to(device)
-            y = model(x)
-            loss = similarity_loss(y, tau)
-            loss.backward()
-        
+            x = torch.flatten(x, 0, 1)
+            if minibatch < batch_size:
+                with torch.no_grad():
+                    xs = torch.split(x, minibatch)
+                    ys = []
+                    for xx in xs:
+                        ys.append(model(xx.to(device)))
+                # compute gradient of model output
+                y = torch.cat(ys)
+                y.requires_grad = True
+                loss = similarity_loss(y, tau)
+                loss.backward()
+                # manual backward
+                ys = torch.split(y.grad, minibatch)
+                for xx, yg in zip(xs, ys):
+                    yy = model(xx.to(device))
+                    yy.backward(yg.to(device))
+            else:
+                y = model(x.to(device))
+                loss = similarity_loss(y, tau)
+                loss.backward()
             optimizer.step()
             losses.append(float(loss.item()))
         print('loss: %f' % np.mean(losses))
@@ -43,13 +60,14 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
         with torch.no_grad():
             x_embed = []
             for x in tqdm(train_data):
-                x = x.reshape((-1,) + x.shape[2:4]).to(device)
-                y = model(x).cpu()
-                x_embed.append(y)
+                x = torch.flatten(x, 0, 1)
+                for xx in torch.split(x, minibatch):
+                    y = model(xx.to(device)).cpu()
+                    x_embed.append(y)
             x_embed = torch.cat(x_embed)
             acc = 0
             for x in tqdm(val_data):
-                x = x.reshape((-1,) + x.shape[2:4]).to(device)
+                x = torch.flatten(x, 0, 1).to(device)
                 y_embed = model(x).cpu()
                 A = torch.matmul(y_embed, torch.cat([x_embed, y_embed]).T)
                 ans = torch.topk(A, 2, dim=1)
@@ -70,7 +88,7 @@ def test_train():
     u = 32
     F_bin = 256
     T = 32
-    N = 40
+    N = 320
     data_N = 2000
     validate_N = 160
     device = torch.device('cuda')
