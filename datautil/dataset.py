@@ -128,6 +128,36 @@ class MyDataset(torch.utils.data.Dataset):
         return i, usable
     
     def __getitem__(self, index):
+        if type(index) == list:
+            torch.set_num_threads(1)
+            bat = len(index)
+            air = torch.ones([214,8192*8+1], dtype=torch.complex64)
+            mic = torch.ones([69,8192*8+1], dtype=torch.complex64)
+            wav1 = torch.zeros([bat, self.sel_size], dtype=torch.float32)
+            wav2 = torch.zeros([bat, self.clip_size + self.pad_start], dtype=torch.float32)
+            for i,x in enumerate(index):
+                w1, w2 = self[x]
+                wav1[i] = w1
+                wav2[i] = w2
+            air_conv = air[torch.randint(0, 214, size=(bat,), dtype=torch.long)]
+            mic_conv = mic[torch.randint(0, 69, size=(bat,), dtype=torch.long)]
+            auga = torch.fft.rfft(wav2, 16384*8, axis=1)
+            wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, axis=1)
+            wav2 = wav2[:,0:8000]
+            mel = torchaudio.transforms.MelSpectrogram(
+                sample_rate=8000,
+                n_fft=1024,
+                hop_length=256,
+                f_min=300,
+                f_max=4000,
+                n_mels=256,
+                window_fn=torch.hann_window)
+            with warnings.catch_warnings():
+                # torchaudio is still using deprecated function torch.rfft
+                warnings.simplefilter("ignore")
+                wav1 = mel(wav1)
+                wav2 = mel(wav2)
+            return wav1, wav2
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index
         wave = wave[start-pad_start:start+du].to(torch.float32)
@@ -254,22 +284,17 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
     dataset = MyDataset(args.csv, cache_dir=args.cache_dir)
     sampler = MySampler(dataset, 20000)
-    loader = torch.utils.data.DataLoader(dataset, num_workers=args.workers, sampler=sampler, batch_size=320)
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        num_workers=args.workers,
+        sampler=torch.utils.data.sampler.BatchSampler(
+            sampler,
+            batch_size=320,
+            drop_last=False)
+        )
     
     print('test dataloader for training data')
     for epoch in range(3):
         sampler.set_epoch(epoch)
-        air = torch.ones([214,16385], dtype=torch.complex64)
-        mic = torch.ones([69,16385], dtype=torch.complex64)
         for x_orig, x_aug in tqdm.tqdm(loader):
-            bat = x_orig.shape[0]
-            with torch.no_grad():
-                torch.set_num_threads(4)
-                air_conv = air[torch.randint(0, 214, size=(bat,), dtype=torch.long)]
-                mic_conv = mic[torch.randint(0, 69, size=(bat,), dtype=torch.long)]
-                auga = torch.fft.rfft(x_aug, 16384*2, axis=1)
-                b = torch.fft.irfft(auga * air_conv * mic_conv, 16384*2, axis=1)
-                b = b[:,8000:16000]
-                del air_conv
-                del mic_conv
-                del auga
+            pass
