@@ -38,6 +38,7 @@ class MyDataset(torch.utils.data.Dataset):
         self.prepare_cache(cache_dir, self.files)
     
     def prepare_cache(self, cache_dir, files):
+        print('preprocessing music...')
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
@@ -143,7 +144,7 @@ class MyDataset(torch.utils.data.Dataset):
             mic_conv = mic[torch.randint(0, 69, size=(bat,), dtype=torch.long)]
             auga = torch.fft.rfft(wav2, 16384*8, axis=1)
             wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, axis=1)
-            wav2 = wav2[:,0:8000]
+            wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
             mel = torchaudio.transforms.MelSpectrogram(
                 sample_rate=8000,
                 n_fft=1024,
@@ -155,9 +156,9 @@ class MyDataset(torch.utils.data.Dataset):
             with warnings.catch_warnings():
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
-                wav1 = mel(wav1)
-                wav2 = mel(wav2)
-            return wav1, wav2
+                wav1 = torch.log(mel(wav1) + 1e-8)
+                wav2 = torch.log(mel(wav2) + 1e-8)
+            return torch.stack([wav1, wav2], dim=1)
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index
         wave = wave[start-pad_start:start+du].to(torch.float32)
@@ -274,6 +275,25 @@ class MySampler(torch.utils.data.Sampler):
         self.generator.manual_seed(42 + epoch)
         self.generator2.manual_seed(42 + epoch)
 
+def collate_fn(x):
+    return x[0]
+
+def build_data_loader(
+        csv_path, cache_dir, num_workers,
+        chunk_size, batch_size):
+    dataset = MyDataset(csv_path, cache_dir=cache_dir)
+    sampler = MySampler(dataset, chunk_size)
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        num_workers=num_workers,
+        sampler=torch.utils.data.sampler.BatchSampler(
+            sampler,
+            batch_size=batch_size//2,
+            drop_last=False),
+        collate_fn=collate_fn
+    )
+    return loader
+
 if __name__ == '__main__':
     argp = argparse.ArgumentParser()
     argp.add_argument('--csv', required=True)
@@ -296,5 +316,5 @@ if __name__ == '__main__':
     print('test dataloader for training data')
     for epoch in range(3):
         sampler.set_epoch(epoch)
-        for x_orig, x_aug in tqdm.tqdm(loader):
+        for x in tqdm.tqdm(loader):
             pass
