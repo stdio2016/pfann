@@ -3,6 +3,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from model import FpNetwork
+import datautil.dataset
 from datautil.dataset import build_data_loader
 from datautil.mock_data import make_false_data
 from torch.utils.data import DataLoader
@@ -32,6 +33,10 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
         tau = 0.05
         print('epoch %d' % (epoch+1))
         losses = []
+        if isinstance(train_data.sampler, datautil.dataset.MySampler):
+            train_data.sampler.shuffle = True
+        if isinstance(train_data.dataset, datautil.dataset.MyDataset):
+            train_data.dataset.augmented = True
         pbar = tqdm(train_data)
         for x in pbar:
             optimizer.zero_grad()
@@ -66,6 +71,10 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
         model.eval()
         with torch.no_grad():
             x_embed = []
+            if isinstance(train_data.sampler, datautil.dataset.MySampler):
+                train_data.sampler.shuffle = False
+            if isinstance(train_data.dataset, datautil.dataset.MyDataset):
+                train_data.dataset.augmented = False
             for x in tqdm(train_data):
                 x = torch.flatten(x, 0, 1)
                 for xx in torch.split(x, minibatch):

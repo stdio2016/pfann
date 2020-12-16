@@ -32,6 +32,7 @@ class MyDataset(torch.utils.data.Dataset):
         self.pad_start = int(pad_start * sample_rate)
         self.sample_rate = sample_rate
         self.clips_per_song = clips_per_song
+        self.augmented = True
         with open(path, 'r', encoding='utf8') as fin:
             reader = csv.DictReader(fin)
             self.files = [f['file'] for f in reader]
@@ -134,7 +135,23 @@ class MyDataset(torch.utils.data.Dataset):
             bat = len(index)
             air = torch.ones([214,8192*8+1], dtype=torch.complex64)
             mic = torch.ones([69,8192*8+1], dtype=torch.complex64)
+            mel = torchaudio.transforms.MelSpectrogram(
+                sample_rate=8000,
+                n_fft=1024,
+                hop_length=256,
+                f_min=300,
+                f_max=4000,
+                n_mels=256,
+                window_fn=torch.hann_window)
             wav1 = torch.zeros([bat, self.sel_size], dtype=torch.float32)
+            if not self.augmented:
+                for i,x in enumerate(index):
+                    wav1[i] = self[x]
+                with warnings.catch_warnings():
+                    # torchaudio is still using deprecated function torch.rfft
+                    warnings.simplefilter("ignore")
+                    return torch.unsqueeze(torch.log(mel(wav1) + 1e-8), 1)
+            
             wav2 = torch.zeros([bat, self.clip_size + self.pad_start], dtype=torch.float32)
             for i,x in enumerate(index):
                 w1, w2 = self[x]
@@ -145,14 +162,6 @@ class MyDataset(torch.utils.data.Dataset):
             auga = torch.fft.rfft(wav2, 16384*8, axis=1)
             wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, axis=1)
             wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
-            mel = torchaudio.transforms.MelSpectrogram(
-                sample_rate=8000,
-                n_fft=1024,
-                hop_length=256,
-                f_min=300,
-                f_max=4000,
-                n_mels=256,
-                window_fn=torch.hann_window)
             with warnings.catch_warnings():
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
@@ -163,6 +172,8 @@ class MyDataset(torch.utils.data.Dataset):
         wave, pad_start, start, du = index
         wave = wave[start-pad_start:start+du].to(torch.float32)
         wave *= 1/32768
+        if not self.augmented:
+            return wave[pad_start:pad_start+self.sel_size]
         pos = torch.randint(0, du-self.sel_size, size=(1,))
         wav1 = wave[pad_start:pad_start+self.sel_size]
         wav2 = wave[max(0, pad_start+pos-self.pad_start) : pad_start+self.sel_size+pos]
@@ -204,6 +215,7 @@ class MySampler(torch.utils.data.Sampler):
         self.generator = torch.Generator()
         self.generator2 = torch.Generator()
         self.pad_start = data_source.pad_start
+        self.shuffle = True
     
     def _preload(self, shuffled, start, que):
         dataset = self.data_source
@@ -232,7 +244,10 @@ class MySampler(torch.utils.data.Sampler):
         dataset = self.data_source
         n = len(dataset.partToSong)
         preloader.start()
-        shuffled = torch.randperm(n, generator=self.generator).tolist()
+        if self.shuffle:
+            shuffled = torch.randperm(n, generator=self.generator).tolist()
+        else:
+            shuffled = list(range(n))
         chunkpos = 0
         next_chunkpos, cnt = self._preload(shuffled, chunkpos, in_que)
         while chunkpos < n:
@@ -249,7 +264,11 @@ class MySampler(torch.utils.data.Sampler):
             for i, info in enumerate(posinfo):
                 partId = shuffled[chunkpos+i]
                 posdict[partId] = info
-            for i in torch.randperm(len(segIds), generator=self.generator2).tolist():
+            if self.shuffle:
+                sub_shuffle = torch.randperm(len(segIds), generator=self.generator2).tolist()
+            else:
+                sub_shuffle = range(len(segIds))
+            for i in sub_shuffle:
                 # look up for segment position
                 segId = int(segIds[i])
                 partId = int(dataset.segToPart[segId])
