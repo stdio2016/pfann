@@ -162,6 +162,8 @@ class MyDataset(torch.utils.data.Dataset):
             auga = torch.fft.rfft(wav2, 16384*8, axis=1)
             wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, axis=1)
             wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
+            amp = torch.sqrt((wav2**2).mean(axis=1))
+            wav2 = torch.normal(mean=wav2, std=amp.unsqueeze(1).expand(-1, self.sel_size))
             with warnings.catch_warnings():
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
@@ -174,9 +176,9 @@ class MyDataset(torch.utils.data.Dataset):
         wave *= 1/32768
         if not self.augmented:
             return wave[pad_start:pad_start+self.sel_size]
-        pos = torch.randint(0, du-self.sel_size, size=(1,))
-        wav1 = wave[pad_start:pad_start+self.sel_size]
-        wav2 = wave[max(0, pad_start+pos-self.pad_start) : pad_start+self.sel_size+pos]
+        pos = torch.randint(0, du-self.sel_size, size=(2,))
+        wav1 = wave[pad_start+pos[0] : pad_start+self.sel_size+pos[0]]
+        wav2 = wave[max(0, pad_start+pos[1]-self.pad_start) : pad_start+self.sel_size+pos[1]]
         wav2 = F.pad(wav2, (self.pad_start+du-len(wav2), 0))
         return (wav1, wav2)
     def __len__(self):
