@@ -100,7 +100,7 @@ class MyDataset(torch.utils.data.Dataset):
         wave, smpRate = get_audio(name)
         wave = torch.FloatTensor(wave)
         # stereo to mono
-        wave = wave.mean(axis=0, keepdim=True)
+        wave = wave.mean(dim=0, keepdim=True)
         # resample to 44100
         torch.set_num_threads(1)
         wave = torchaudio.compliance.kaldi.resample_waveform(wave, smpRate, self.sample_rate)
@@ -159,11 +159,16 @@ class MyDataset(torch.utils.data.Dataset):
                 wav2[i] = w2
             air_conv = air[torch.randint(0, 214, size=(bat,), dtype=torch.long)]
             mic_conv = mic[torch.randint(0, 69, size=(bat,), dtype=torch.long)]
-            auga = torch.fft.rfft(wav2, 16384*8, axis=1)
-            wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, axis=1)
+            auga = torch.fft.rfft(wav2, 16384*8, dim=1)
+            wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, dim=1)
             wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
-            amp = torch.sqrt((wav2**2).mean(axis=1))
+            wav2 -= wav2.mean(dim=1).unsqueeze(1)
+            amp = torch.sqrt((wav2**2).mean(dim=1))
             wav2 = torch.normal(mean=wav2, std=amp.unsqueeze(1).expand(-1, self.sel_size))
+            # normalize volume
+            wav1 -= wav1.mean(dim=1).unsqueeze(1)
+            wav1 = F.normalize(wav1, p=2, dim=1)
+            wav2 = F.normalize(wav2, p=2, dim=1)
             with warnings.catch_warnings():
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
