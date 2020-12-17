@@ -33,6 +33,7 @@ class MyDataset(torch.utils.data.Dataset):
         self.sample_rate = sample_rate
         self.clips_per_song = clips_per_song
         self.augmented = True
+        self.output_wav = False
         with open(path, 'r', encoding='utf8') as fin:
             reader = csv.DictReader(fin)
             self.files = [f['file'] for f in reader]
@@ -152,7 +153,7 @@ class MyDataset(torch.utils.data.Dataset):
                     warnings.simplefilter("ignore")
                     return torch.unsqueeze(torch.log(mel(wav1) + 1e-8), 1)
             
-            wav2 = torch.zeros([bat, self.clip_size + self.pad_start], dtype=torch.float32)
+            wav2 = torch.zeros([bat, self.sel_size + self.pad_start], dtype=torch.float32)
             for i,x in enumerate(index):
                 w1, w2 = self[x]
                 wav1[i] = w1
@@ -164,7 +165,7 @@ class MyDataset(torch.utils.data.Dataset):
             wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
             wav2 -= wav2.mean(dim=1).unsqueeze(1)
             amp = torch.sqrt((wav2**2).mean(dim=1))
-            wav2 = torch.normal(mean=wav2, std=amp.unsqueeze(1).expand(-1, self.sel_size))
+            wav2 = torch.normal(mean=wav2, std=amp.unsqueeze(1)*0.32)
             # normalize volume
             wav1 -= wav1.mean(dim=1).unsqueeze(1)
             wav1 = F.normalize(wav1, p=2, dim=1)
@@ -172,8 +173,9 @@ class MyDataset(torch.utils.data.Dataset):
             with warnings.catch_warnings():
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
-                wav1 = torch.log(mel(wav1) + 1e-8)
-                wav2 = torch.log(mel(wav2) + 1e-8)
+                if not self.output_wav:
+                    wav1 = torch.log(mel(wav1) + 1e-8)
+                    wav2 = torch.log(mel(wav2) + 1e-8)
             return torch.stack([wav1, wav2], dim=1)
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index
@@ -181,10 +183,10 @@ class MyDataset(torch.utils.data.Dataset):
         wave *= 1/32768
         if not self.augmented:
             return wave[pad_start:pad_start+self.sel_size]
-        pos = torch.randint(0, du-self.sel_size, size=(2,))
+        pos = torch.randint(0, self.clip_size-self.sel_size, size=(2,))
         wav1 = wave[pad_start+pos[0] : pad_start+self.sel_size+pos[0]]
         wav2 = wave[max(0, pad_start+pos[1]-self.pad_start) : pad_start+self.sel_size+pos[1]]
-        wav2 = F.pad(wav2, (self.pad_start+du-len(wav2), 0))
+        wav2 = F.pad(wav2, (self.pad_start+self.sel_size-len(wav2), 0))
         return (wav1, wav2)
     def __len__(self):
         return len(self.segToPart)
@@ -251,6 +253,7 @@ class MySampler(torch.utils.data.Sampler):
         dataset = self.data_source
         n = len(dataset.partToSong)
         preloader.start()
+        self.preloader = preloader
         if self.shuffle:
             shuffled = torch.randperm(n, generator=self.generator).tolist()
         else:
@@ -283,7 +286,7 @@ class MySampler(torch.utils.data.Sampler):
                 segPos = int(dataset.segPos[segId])
                 padInfo = posdict[partId]
                 seg_start = padInfo['start'] + (segPos - partPos)
-                seg_padStart = min(self.pad_start, padInfo['padStart'])
+                seg_padStart = min(self.pad_start, padInfo['padStart'] + (segPos - partPos))
                 seg_du = dataset.clip_size
                 yield (loaded, seg_padStart, seg_start, seg_du)
             chunkpos = next_chunkpos
