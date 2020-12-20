@@ -1,9 +1,9 @@
 import os
 import subprocess
 from pathlib import Path
+
 import miniaudio
 import numpy as np
-import torchaudio
 
 def miniaudio_get_audio(filename):
     code = Path(filename).read_bytes()

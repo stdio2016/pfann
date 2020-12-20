@@ -1,10 +1,12 @@
+import math
 import warnings
 import argparse
+
 import torch
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import torchaudio
-import math
+
 from datautil.dataset import build_data_loader
 
 if __name__ == '__main__':

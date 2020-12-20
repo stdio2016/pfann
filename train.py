@@ -1,13 +1,15 @@
 import argparse
+
 import numpy as np
 from tqdm import tqdm
 import torch
+from torch.utils.data import DataLoader
+import torch.multiprocessing as mp
+
 from model import FpNetwork
 import datautil.dataset
 from datautil.dataset import build_data_loader
 from datautil.mock_data import make_false_data
-from torch.utils.data import DataLoader
-import torch.multiprocessing as mp
 
 def similarity_loss(y, tau):
     a = torch.matmul(y, y.T)

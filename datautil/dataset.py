@@ -1,27 +1,22 @@
 import argparse
 import csv
 from pathlib import Path
-import time
-import os
 import warnings
-import struct
 
 import tqdm
-from simpleutils import get_hash
-
 import torch
 import torch.fft
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import numpy as np
-import miniaudio
-import scipy.signal
 # torchaudio currently (0.7) will throw warning that cannot be disabled
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import torchaudio
-from datautil.audio import get_audio
 torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
+
+from simpleutils import get_hash
+from datautil.audio import get_audio
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, path, cache_dir='caches', hop_size=0.5, clip_size=1.2, sample_rate=8000, clips_per_song=60, sel_size=1, pad_start=1):

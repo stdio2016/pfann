@@ -1,5 +1,6 @@
-import torch
 import math
+
+import torch
 import numpy as np
 from tqdm import trange
 from torch.nn import Module, Conv2d, LayerNorm, ReLU, ModuleList, Conv1d, ELU, ZeroPad2d
