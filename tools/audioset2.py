@@ -31,20 +31,24 @@ def download(name, start, end, where, loger):
     link = proc.stdout.read().strip()
     proc.wait()
     if proc.returncode == 0:
-        subprocess.run(['ffmpeg', '-loglevel', 'error',
+        proc = subprocess.Popen(['ffmpeg', '-loglevel', 'error',
             '-ss', str(start), '-i', link, '-t', str(end-start),
             '-y', out_path
-        ], stdin=None)
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        ], stdin=None, stderr=subprocess.PIPE)
+        errs = proc.stderr.read().decode('utf8')
+        print(errs, end='')
+        loger.write(errs)
+        if not os.path.exists(out_path):
+            print('failed to download ;-(')
+            loger.write('%s download %s error!\n' % (datetime.now(), name))
+        loger.flush()
     else:
         print('failed to download ;-(')
         with open(out_path, 'wb') as fout:
             pass
     t2 = time.time()
-    if t2-t1 < 10:
-        print('stop for a moment~~~')
-        time.sleep(10 - (t2-t1))
+    print('stop for a moment~~~')
+    time.sleep(max(2, 10 - (t2-t1)))
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
