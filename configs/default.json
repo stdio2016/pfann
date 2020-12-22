@@ -1,0 +1,21 @@
+{
+  "train_csv": "configs/train.csv",
+  "validate_csv": "configs/validate.csv",
+  "cache_dir": "caches",
+  "batch_size": 640,
+  "shuffle_size": 20000,
+  "noise": {
+    "train": "",
+    "validate": ""
+  },
+  "micirp": {
+    "train": "",
+    "validate": "",
+    "length": 0.5
+  },
+  "air": {
+    "train": "",
+    "validate": "",
+    "length": 1
+  }
+}

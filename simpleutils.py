@@ -1,6 +1,7 @@
 # every utils that don't use torch
 import hashlib
 import time
+import json
 
 class Timing():
     def __init__(self, name='run time'):
@@ -19,3 +20,7 @@ def get_hash(s):
     m = hashlib.md5()
     m.update(s.encode('utf8'))
     return m.hexdigest()
+
+def read_config(path):
+    with open(path, 'r') as fin:
+        return json.load(fin)

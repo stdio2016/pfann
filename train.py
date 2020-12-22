@@ -10,6 +10,7 @@ from model import FpNetwork
 import datautil.dataset
 from datautil.dataset import build_data_loader
 from datautil.mock_data import make_false_data
+import simpleutils
 
 def similarity_loss(y, tau):
     a = torch.matmul(y, y.T)
@@ -24,7 +25,7 @@ def similarity_loss(y, tau):
     loss = torch.sum(Ls) / -y.shape[0]
     return loss
 
-def train(model, optimizer, train_data, val_data, batch_size, device):
+def train(model, optimizer, train_data, val_data, batch_size, device, params):
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
@@ -35,11 +36,15 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
         tau = 0.05
         print('epoch %d' % (epoch+1))
         losses = []
-        if isinstance(train_data.sampler, datautil.dataset.MySampler):
-            train_data.sampler.shuffle = True
+        if hasattr(train_data, 'mysampler'):
+            train_data.mysampler.shuffle = True
+            train_data.mysampler.set_epoch(epoch)
         if isinstance(train_data.dataset, datautil.dataset.MyDataset):
             train_data.dataset.augmented = True
-        pbar = tqdm(train_data)
+        if params['no_train']:
+            pbar = []
+        else:
+            pbar = tqdm(train_data)
         for x in pbar:
             optimizer.zero_grad()
         
@@ -68,13 +73,14 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
             lossnum = float(loss.item())
             pbar.set_description('loss=%f'%lossnum)
             losses.append(lossnum)
-        print('loss: %f' % np.mean(losses))
+        if not params['no_train']:
+            print('loss: %f' % np.mean(losses))
 
         model.eval()
         with torch.no_grad():
             x_embed = []
-            if isinstance(train_data.sampler, datautil.dataset.MySampler):
-                train_data.sampler.shuffle = False
+            if hasattr(train_data, 'mysampler'):
+                train_data.mysampler.shuffle = False
             if isinstance(train_data.dataset, datautil.dataset.MyDataset):
                 train_data.dataset.augmented = False
             for x in tqdm(train_data):
@@ -97,6 +103,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device):
             print('validate score: %f' % (acc / validate_N))
 
 def test_train(args):
+    params = simpleutils.read_config(args.params)
+    params['no_train'] = args.no_train
     torch.manual_seed(123)
     torch.cuda.manual_seed(123)
     torch.backends.cudnn.benchmark = False
@@ -107,28 +115,28 @@ def test_train(args):
     F_bin = 256
     T = 32
     batch_size = 640
-    data_N = 2000
-    validate_N = 160
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T).to(device)
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
-    x_mock = make_false_data(data_N, F_bin, T)
-    y_mock = make_false_data(validate_N, F_bin, T)
-    if args.csv:
-        train_data = build_data_loader(
-            csv_path=args.csv,
-            cache_dir=args.cache_dir,
-            num_workers=2, chunk_size=20000, batch_size=batch_size)
+    if args.data:
+        train_data = build_data_loader(params, args.data)
     else:
+        data_N = 2000
+        x_mock = make_false_data(data_N, F_bin, T)
         train_data = DataLoader(x_mock, batch_size=batch_size//2, shuffle=True)
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4 * batch_size/640)
-    train(model, optimizer, train_data, y_mock, batch_size, device)
+    
+    validate_N = 160
+    y_mock = make_false_data(validate_N, F_bin, T)
+    train(model, optimizer, train_data, y_mock, batch_size, device, params)
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
-    args.add_argument('--csv')
-    args.add_argument('--cache-dir', default='caches')
+    args.add_argument('-d', '--data')
+    args.add_argument('-p', '--params', default='configs/default.json')
+    args.add_argument('--no-train', action='store_true')
     args = args.parse_args()
     test_train(args)

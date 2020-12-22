@@ -8,18 +8,19 @@ with warnings.catch_warnings():
     import torchaudio
 
 from datautil.dataset import build_data_loader
+import simpleutils
 
 if __name__ == '__main__':
     # don't delete this line, because my data loader uses queues
     torch.multiprocessing.set_start_method('spawn')
     args = argparse.ArgumentParser()
-    args.add_argument('--csv', required=True)
-    args.add_argument('--cache-dir', required=True)
+    args.add_argument('-d', '--data')
+    args.add_argument('-p', '--params', default='configs/default.json')
     args = args.parse_args()
-    train_data = build_data_loader(
-        csv_path=args.csv,
-        cache_dir=args.cache_dir,
-        num_workers=2, chunk_size=20000, batch_size=640)
+    
+    params = simpleutils.read_config(args.params)
+    
+    train_data = build_data_loader(params, args.data)
     i = 0
     train_data.dataset.output_wav = True
     train_data.sampler.sampler.shuffle = False

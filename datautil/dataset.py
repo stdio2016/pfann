@@ -15,7 +15,7 @@ with warnings.catch_warnings():
     import torchaudio
 torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
 
-from simpleutils import get_hash
+from simpleutils import get_hash, read_config
 from datautil.audio import get_audio
 
 class MyDataset(torch.utils.data.Dataset):
@@ -302,43 +302,34 @@ class MySampler(torch.utils.data.Sampler):
 def collate_fn(x):
     return x[0]
 
-def build_data_loader(
-        csv_path, cache_dir, num_workers,
-        chunk_size, batch_size):
-    dataset = MyDataset(csv_path, cache_dir=cache_dir)
-    sampler = MySampler(dataset, chunk_size)
+def build_data_loader(params, data_dir):
+    num_workers = 2
+    dataset = MyDataset(params['train_csv'], cache_dir=params['cache_dir'])
+    sampler = MySampler(dataset, params['shuffle_size'])
     loader = torch.utils.data.DataLoader(
         dataset,
         num_workers=num_workers,
         sampler=torch.utils.data.sampler.BatchSampler(
             sampler,
-            batch_size=batch_size//2,
+            batch_size=params['batch_size']//2,
             drop_last=False),
         collate_fn=collate_fn
     )
+    loader.mydataset = dataset
+    loader.mysampler = sampler
     return loader
 
 if __name__ == '__main__':
     argp = argparse.ArgumentParser()
-    argp.add_argument('--csv', required=True)
-    argp.add_argument('--cache-dir', default='caches')
-    argp.add_argument('--workers', type=int, default=0)
+    argp.add_argument('-d', '--data')
+    argp.add_argument('-p', '--params', default='configs/default.json')
     args = argp.parse_args()
     
     mp.set_start_method('spawn')
-    dataset = MyDataset(args.csv, cache_dir=args.cache_dir)
-    sampler = MySampler(dataset, 20000)
-    loader = torch.utils.data.DataLoader(
-        dataset,
-        num_workers=args.workers,
-        sampler=torch.utils.data.sampler.BatchSampler(
-            sampler,
-            batch_size=320,
-            drop_last=False)
-        )
-    
+    params = read_config(args.params)
+    loader = build_data_loader(params, args.data)
     print('test dataloader for training data')
     for epoch in range(3):
-        sampler.set_epoch(epoch)
+        loader.mysampler.set_epoch(epoch)
         for x in tqdm.tqdm(loader):
             pass
