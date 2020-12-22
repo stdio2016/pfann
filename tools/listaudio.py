@@ -49,24 +49,27 @@ def get_audio_length(filename):
         return ffmpeg_get_audio_length(filename)
 
 formats = {'.wav', '.mp3', '.m4a', '.aac', '.ogg', '.flac', '.webm'}
-def find_all_audio(folder, all_files):
+def find_all_audio(folder, relative, all_files):
     for name in os.listdir(folder):
         full_name = os.path.join(folder, name)
+        nxt_relative = os.path.join(relative, name)
         if os.path.isdir(full_name):
-            find_all_audio(full_name, all_files)
+            find_all_audio(full_name, nxt_relative, all_files)
         else:
             ext = os.path.splitext(name)[1]
             if ext in formats:
-                all_files.append(full_name)
+                all_files.append(nxt_relative)
     return all_files
 
 def worker(filename):
-    return filename, get_audio_length(filename)
+    folder, relative = filename
+    return relative, get_audio_length(os.path.join(folder, relative))
 
 if __name__ == '__main__':
     all_files = []
     print('searching audio files...')
-    find_all_audio(args.folder, all_files)
+    find_all_audio(args.folder, '', all_files)
+    all_files = [(args.folder, x) for x in all_files]
     multiprocessing.set_start_method('spawn')
     with Pool(args.threads) as p:
         sound_files = []
