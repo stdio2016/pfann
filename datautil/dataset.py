@@ -19,7 +19,13 @@ from simpleutils import get_hash, read_config
 from datautil.audio import get_audio
 
 class MyDataset(torch.utils.data.Dataset):
-    def __init__(self, path, cache_dir='caches', hop_size=0.5, clip_size=1.2, sample_rate=8000, clips_per_song=60, sel_size=1, pad_start=1):
+    def __init__(self, train_csv, data_dir, params):
+        hop_size=0.5
+        clip_size=1.2
+        sample_rate=8000
+        clips_per_song=60
+        sel_size=1
+        pad_start=1
         super(MyDataset, self).__init__()
         self.clip_size = int(clip_size * sample_rate)
         self.sel_size = int(sel_size * sample_rate)
@@ -29,10 +35,12 @@ class MyDataset(torch.utils.data.Dataset):
         self.clips_per_song = clips_per_song
         self.augmented = True
         self.output_wav = False
-        with open(path, 'r', encoding='utf8') as fin:
+        self.data_dir = Path(data_dir)
+        self.params = params
+        with open(train_csv, 'r', encoding='utf8') as fin:
             reader = csv.DictReader(fin)
             self.files = [f['file'] for f in reader]
-        self.prepare_cache(cache_dir, self.files)
+        self.prepare_cache(params['cache_dir'], self.files)
     
     def prepare_cache(self, cache_dir, files):
         print('preprocessing music...')
@@ -93,7 +101,7 @@ class MyDataset(torch.utils.data.Dataset):
                 fout.seek(4 + duration * 2)
                 usable = np.frombuffer(fout.read(), dtype=np.int32)
             return i, usable
-        wave, smpRate = get_audio(name)
+        wave, smpRate = get_audio(self.data_dir/name)
         wave = torch.FloatTensor(wave)
         # stereo to mono
         wave = wave.mean(dim=0, keepdim=True)
@@ -304,7 +312,7 @@ def collate_fn(x):
 
 def build_data_loader(params, data_dir):
     num_workers = 2
-    dataset = MyDataset(params['train_csv'], cache_dir=params['cache_dir'])
+    dataset = MyDataset(train_csv=params['train_csv'], data_dir=data_dir, params=params)
     sampler = MySampler(dataset, params['shuffle_size'])
     loader = torch.utils.data.DataLoader(
         dataset,
@@ -321,7 +329,7 @@ def build_data_loader(params, data_dir):
 
 if __name__ == '__main__':
     argp = argparse.ArgumentParser()
-    argp.add_argument('-d', '--data')
+    argp.add_argument('-d', '--data', required=True)
     argp.add_argument('-p', '--params', default='configs/default.json')
     args = argp.parse_args()
     

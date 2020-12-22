@@ -14,7 +14,7 @@ if __name__ == '__main__':
     # don't delete this line, because my data loader uses queues
     torch.multiprocessing.set_start_method('spawn')
     args = argparse.ArgumentParser()
-    args.add_argument('-d', '--data')
+    args.add_argument('-d', '--data', required=True)
     args.add_argument('-p', '--params', default='configs/default.json')
     args = args.parse_args()
     
