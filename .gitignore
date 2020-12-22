@@ -1,2 +1,9 @@
+# cache files
 __pycache__
 caches/
+
+# output files
+*.wav
+
+# log files
+dlyt.txt
