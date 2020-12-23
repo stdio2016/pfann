@@ -1,0 +1,25 @@
+### Audioset
+
+python tools/listaudio.py --folder /path/to/audioset --out configs/noise.csv
+
+This command will show errors because some videos are unavailable.
+
+Finally run the command:
+
+python tools/traintestsplit.py --csv configs/noise.csv --train configs/noise_train.csv --train-size 8 --test configs/noise_val.csv --test-size 2 -p
+
+### Microphone impulse response dataset
+
+Go to http://micirp.blogspot.com/ , and download files to a folder named
+"micirp". Then run the commands:
+
+python tools/listaudio.py --folder /path/to/micirp --out configs/micirp.csv
+python tools/traintestsplit.py --csv configs/micirp.csv --train configs/micirp_train.csv --train-size 8 --test configs/micirp_val.csv --test-size 2 -p
+
+### Aachen Impulse Response Database
+
+Download zip from https://www.iks.rwth-aachen.de/en/research/tools-downloads/databases/aachen-impulse-response-database/
+and unzip it.
+
+python -m datautil.ir /path/to/AIR_1_4 configs/air.csv
+python tools/traintestsplit.py --csv configs/air.csv --train configs/air_train.csv --train-size 8 --test configs/air_val.csv --test-size 2 -p
