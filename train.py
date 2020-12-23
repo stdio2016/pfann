@@ -98,20 +98,26 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
                     y_embed.append(y)
             y_embed = torch.cat(y_embed)
             y_embed_org = y_embed[0::2]
-            y_embed_aug = y_embed[1::2]
-            ranks = []
-            for y_embed in torch.split(y_embed_org, 16):
-                A = torch.matmul(y_embed, torch.cat([x_embed, y_embed_aug]).T)
-                ans = torch.topk(A, 1, dim=1)
-                rank = (A.T >= A.diagonal(train_N + validate_N)).sum(dim=0)
-                ranks.append(rank)
-                for i in range(y_embed.shape[0]):
-                    part = train_N + validate_N
-                    if ans.indices[i,0] == part:
-                        acc += 1
-                    validate_N += 1
-            ranks = torch.cat(ranks)
+            y_embed_aug = y_embed[1::2].to(device)
+            
+            # compute validation score on GPU
+            self_score = []
+            for embeds in torch.split(y_embed_org, 320):
+                A = torch.matmul(y_embed_aug, embeds.T.to(device))
+                self_score.append(A.diagonal(-validate_N).cpu())
+                validate_N += embeds.shape[0]
+            self_score = torch.cat(self_score).to(device)
+            
+            ranks = torch.zeros(validate_N, dtype=torch.long).to(device)
+            for embeds in tqdm(torch.split(x_embed, 320)):
+                A = torch.matmul(y_embed_aug, embeds.T.to(device))
+                ranks += (A.T >= self_score).sum(dim=0)
+            for embeds in torch.split(y_embed_org, 320):
+                A = torch.matmul(y_embed_aug, embeds.T.to(device))
+                ranks += (A.T >= self_score).sum(dim=0)
+            acc = int((ranks == 1).sum())
             print('validate score: %f mrr: %f' % (acc / validate_N, (1/ranks).mean()))
+        del A, ranks, self_score, y_embed_aug, y_embed_org, y_embed
 
 def test_train(args):
     params = simpleutils.read_config(args.params)
