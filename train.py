@@ -122,6 +122,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
 def test_train(args):
     params = simpleutils.read_config(args.params)
     params['no_train'] = args.no_train
+    if args.workers is not None:
+        params['num_workers'] = args.workers
     torch.manual_seed(123)
     torch.cuda.manual_seed(123)
     torch.backends.cudnn.benchmark = False
@@ -161,5 +163,6 @@ if __name__ == "__main__":
     args.add_argument('--validate', action='store_true')
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('--no-train', action='store_true')
+    args.add_argument('-w', '--workers', type=int)
     args = args.parse_args()
     test_train(args)

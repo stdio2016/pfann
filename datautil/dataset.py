@@ -311,7 +311,7 @@ def collate_fn(x):
     return x[0]
 
 def build_data_loader(params, data_dir, for_train=True):
-    num_workers = 2
+    num_workers = params.get('num_workers', 2)
     list_csv = params['train_csv'] if for_train else params['validate_csv']
     
     dataset = MyDataset(train_csv=list_csv, data_dir=data_dir, params=params, for_train=for_train)
