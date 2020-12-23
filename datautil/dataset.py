@@ -19,7 +19,7 @@ from simpleutils import get_hash, read_config
 from datautil.audio import get_audio
 
 class MyDataset(torch.utils.data.Dataset):
-    def __init__(self, train_csv, data_dir, params):
+    def __init__(self, train_csv, data_dir, params, for_train=True):
         hop_size=0.5
         clip_size=1.2
         sample_rate=8000
@@ -310,9 +310,11 @@ class MySampler(torch.utils.data.Sampler):
 def collate_fn(x):
     return x[0]
 
-def build_data_loader(params, data_dir):
+def build_data_loader(params, data_dir, for_train=True):
     num_workers = 2
-    dataset = MyDataset(train_csv=params['train_csv'], data_dir=data_dir, params=params)
+    list_csv = params['train_csv'] if for_train else params['validate_csv']
+    
+    dataset = MyDataset(train_csv=list_csv, data_dir=data_dir, params=params, for_train=for_train)
     sampler = MySampler(dataset, params['shuffle_size'])
     loader = torch.utils.data.DataLoader(
         dataset,

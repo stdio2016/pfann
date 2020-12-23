@@ -29,8 +29,6 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
-    validate_N = val_data.shape[0] * 2
-    val_data = DataLoader(val_data, batch_size=minibatch//2)
     for epoch in range(100):
         model.train()
         tau = 0.05
@@ -89,18 +87,31 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
                     y = model(xx.to(device)).cpu()
                     x_embed.append(y)
             x_embed = torch.cat(x_embed)
+            train_N = x_embed.shape[0]
             acc = 0
+            validate_N = 0
+            y_embed = []
             for x in tqdm(val_data):
-                x = torch.flatten(x, 0, 1).to(device)
-                y_embed = model(x).cpu()
-                A = torch.matmul(y_embed, torch.cat([x_embed, y_embed]).T)
-                ans = torch.topk(A, 2, dim=1)
+                x = torch.flatten(x, 0, 1)
+                for xx in torch.split(x, minibatch):
+                    y = model(xx.to(device)).cpu()
+                    y_embed.append(y)
+            y_embed = torch.cat(y_embed)
+            y_embed_org = y_embed[0::2]
+            y_embed_aug = y_embed[1::2]
+            ranks = []
+            for y_embed in torch.split(y_embed_org, 16):
+                A = torch.matmul(y_embed, torch.cat([x_embed, y_embed_aug]).T)
+                ans = torch.topk(A, 1, dim=1)
+                rank = (A.T >= A.diagonal(train_N + validate_N)).sum(dim=0)
+                ranks.append(rank)
                 for i in range(y_embed.shape[0]):
-                    part = i+1 if i%2==0 else i-1
-                    part += x_embed.shape[0]
-                    if ans.indices[i,1] == part:
+                    part = train_N + validate_N
+                    if ans.indices[i,0] == part:
                         acc += 1
-            print('validate score: %f' % (acc / validate_N))
+                    validate_N += 1
+            ranks = torch.cat(ranks)
+            print('validate score: %f mrr: %f' % (acc / validate_N, (1/ranks).mean()))
 
 def test_train(args):
     params = simpleutils.read_config(args.params)
@@ -120,7 +131,7 @@ def test_train(args):
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
     if args.data:
-        train_data = build_data_loader(params, args.data)
+        train_data = build_data_loader(params, args.data, for_train=True)
     else:
         data_N = 2000
         x_mock = make_false_data(data_N, F_bin, T)
@@ -128,14 +139,20 @@ def test_train(args):
     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4 * batch_size/640)
     
-    validate_N = 160
-    y_mock = make_false_data(validate_N, F_bin, T)
-    train(model, optimizer, train_data, y_mock, batch_size, device, params)
+    if args.validate:
+        val_data = build_data_loader(params, args.data, for_train=False)
+    else:
+        validate_N = 160
+        y_mock = make_false_data(validate_N, F_bin, T)
+        val_data = DataLoader(y_mock, batch_size=minibatch//2)
+        val_data.mysampler.shuffle = False
+    train(model, optimizer, train_data, val_data, batch_size, device, params)
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-d', '--data')
+    args.add_argument('--validate', action='store_true')
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('--no-train', action='store_true')
     args = args.parse_args()
