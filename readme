@@ -1,4 +1,30 @@
-### Audioset
+## Prepare dataset
+
+### FMA dataset
+
+Download fma_medium from https://github.com/mdeff/fma and unzip to
+/path/to/fma_medium .
+
+python tools/listaudio.py --folder /path/to/fma_medium --out configs/fma.csv
+python tools/traintestsplit.py --csv configs/fma.csv --train configs/train.csv --train-size 10000 --test configs/testval.csv --test-size 1000
+python tools/traintestsplit.py --csv configs/testval.csv --train configs/validate.csv --train-size 500 --test configs/test.csv --test-size 500
+
+### AudioSet
+
+Download 3 csv files and ontology json from https://research.google.com/audioset/download.html .
+Then run these to list all the videos needed:
+
+python tools/audioset.py /path/to/unbalanced_train_segments.csv configs/audioset1.csv --ontology /path/to/ontology.json
+python tools/audioset.py /path/to/balanced_train_segments.csv configs/audioset2.csv --ontology /path/to/ontology.json
+python tools/audioset.py /path/to/eval_segments.csv configs/audioset3.csv --ontology /path/to/ontology.json
+
+Use these commands to crawl videos from youtube and convert to wav:
+
+python tools/audioset2.py lists/audioset1.csv /path/to/audioset
+python tools/audioset2.py lists/audioset2.csv /path/to/audioset
+python tools/audioset2.py lists/audioset3.csv /path/to/audioset
+
+After downloading, run this command to list all successfully downloaded files:
 
 python tools/listaudio.py --folder /path/to/audioset --out configs/noise.csv
 
@@ -19,7 +45,11 @@ python tools/traintestsplit.py --csv configs/micirp.csv --train configs/micirp_t
 ### Aachen Impulse Response Database
 
 Download zip from https://www.iks.rwth-aachen.de/en/research/tools-downloads/databases/aachen-impulse-response-database/
-and unzip it.
+and unzip to /path/to/AIR_1_4 .
 
 python -m datautil.ir /path/to/AIR_1_4 configs/air.csv
 python tools/traintestsplit.py --csv configs/air.csv --train configs/air_train.csv --train-size 8 --test configs/air_val.csv --test-size 2 -p
+
+## train
+
+python train.py -d /path/to/fma_medium/ --validate
