@@ -76,12 +76,13 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
 
         model.eval()
         with torch.no_grad():
+            print('validating')
             x_embed = []
             if hasattr(train_data, 'mysampler'):
                 train_data.mysampler.shuffle = False
             if isinstance(train_data.dataset, datautil.dataset.MyDataset):
                 train_data.dataset.augmented = False
-            for x in tqdm(train_data):
+            for x in tqdm(train_data, desc='train data'):
                 x = torch.flatten(x, 0, 1)
                 for xx in torch.split(x, minibatch):
                     y = model(xx.to(device)).cpu()
@@ -91,7 +92,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
             acc = 0
             validate_N = 0
             y_embed = []
-            for x in tqdm(val_data):
+            for x in tqdm(val_data, desc='val data'):
                 x = torch.flatten(x, 0, 1)
                 for xx in torch.split(x, minibatch):
                     y = model(xx.to(device)).cpu()
@@ -109,7 +110,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
             self_score = torch.cat(self_score).to(device)
             
             ranks = torch.zeros(validate_N, dtype=torch.long).to(device)
-            for embeds in tqdm(torch.split(x_embed, 320)):
+            for embeds in torch.split(x_embed, 320):
                 A = torch.matmul(y_embed_aug, embeds.T.to(device))
                 ranks += (A.T >= self_score).sum(dim=0)
             for embeds in torch.split(y_embed_org, 320):

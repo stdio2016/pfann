@@ -3,7 +3,6 @@ import csv
 import os
 import warnings
 
-import tqdm
 import miniaudio
 import scipy.io
 import numpy as np
@@ -24,7 +23,7 @@ class AIR:
                 airs.append(row[0])
         data = []
         to_len = int(length * sample_rate)
-        for name in tqdm.tqdm(airs):
+        for name in airs:
             mat = scipy.io.loadmat(os.path.join(air_dir, name))
             h_air = torch.tensor(mat['h_air'].astype(np.float32))
             assert h_air.shape[0] == 1
@@ -52,7 +51,7 @@ class MicIRP:
                 mics.append(row[0])
         data = []
         to_len = int(length * sample_rate)
-        for name in tqdm.tqdm(mics):
+        for name in mics:
             info = miniaudio.wav_read_file_f32(os.path.join(mic_dir, name))
             smp = torch.tensor(np.frombuffer(info.samples, dtype=np.float32))
             resampled = torchaudio.transforms.Resample(info.sample_rate, sample_rate)(smp)
