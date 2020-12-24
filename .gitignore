@@ -9,5 +9,4 @@ caches/
 dlyt.txt
 
 # the list is too long
-configs/train.csv
-configs/validate.csv
+configs/*.csv

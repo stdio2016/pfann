@@ -4,18 +4,19 @@
   "cache_dir": "caches",
   "batch_size": 640,
   "shuffle_size": 20000,
+  "fftconv_n": 32768,
   "noise": {
     "train": "",
     "validate": ""
   },
   "micirp": {
-    "train": "",
-    "validate": "",
+    "train": "configs/micirp_train.csv",
+    "validate": "configs/micirp_val.csv",
     "length": 0.5
   },
   "air": {
-    "train": "",
-    "validate": "",
+    "train": "configs/air_train.csv",
+    "validate": "configs/air_val.csv",
     "length": 1
   }
 }

@@ -139,7 +139,7 @@ def test_train(args):
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
     if args.data:
-        train_data = build_data_loader(params, args.data, for_train=True)
+        train_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=True)
     else:
         data_N = 2000
         x_mock = make_false_data(data_N, F_bin, T)
@@ -148,18 +148,21 @@ def test_train(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4 * batch_size/640)
     
     if args.validate:
-        val_data = build_data_loader(params, args.data, for_train=False)
+        val_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=False)
+        val_data.mysampler.shuffle = False
     else:
         validate_N = 160
         y_mock = make_false_data(validate_N, F_bin, T)
-        val_data = DataLoader(y_mock, batch_size=minibatch//2)
-        val_data.mysampler.shuffle = False
+        val_data = DataLoader(y_mock, batch_size=40//2)
     train(model, optimizer, train_data, val_data, batch_size, device, params)
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-d', '--data')
+    args.add_argument('--noise')
+    args.add_argument('--air')
+    args.add_argument('--micirp')
     args.add_argument('--validate', action='store_true')
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('--no-train', action='store_true')

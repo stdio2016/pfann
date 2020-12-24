@@ -17,9 +17,10 @@ torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
 
 from simpleutils import get_hash, read_config
 from datautil.audio import get_audio
+from datautil.ir import AIR, MicIRP
 
 class MyDataset(torch.utils.data.Dataset):
-    def __init__(self, train_csv, data_dir, params, for_train=True):
+    def __init__(self, train_csv, data_dir, noise_dir, air_dir, micirp_dir, params, for_train=True):
         hop_size=0.5
         clip_size=1.2
         sample_rate=8000
@@ -37,6 +38,21 @@ class MyDataset(torch.utils.data.Dataset):
         self.output_wav = False
         self.data_dir = Path(data_dir)
         self.params = params
+        train_val = 'train' if for_train else 'validate'
+        if air_dir:
+            self.air = AIR(air_dir=air_dir,
+                list_csv=params['air'][train_val],
+                length=params['air']['length'],
+                fftconv_n=params['fftconv_n'], sample_rate=sample_rate)
+        else:
+            self.air = None
+        if micirp_dir:
+            self.micirp = MicIRP(mic_dir=micirp_dir,
+                list_csv=params['micirp'][train_val],
+                length=params['micirp']['length'],
+                fftconv_n=params['fftconv_n'], sample_rate=sample_rate)
+        else:
+            self.micirp = None
         with open(train_csv, 'r', encoding='utf8') as fin:
             reader = csv.DictReader(fin)
             self.files = [f['file'] for f in reader]
@@ -137,8 +153,6 @@ class MyDataset(torch.utils.data.Dataset):
         if type(index) == list:
             torch.set_num_threads(1)
             bat = len(index)
-            air = torch.ones([214,8192*8+1], dtype=torch.complex64)
-            mic = torch.ones([69,8192*8+1], dtype=torch.complex64)
             mel = torchaudio.transforms.MelSpectrogram(
                 sample_rate=8000,
                 n_fft=1024,
@@ -161,18 +175,27 @@ class MyDataset(torch.utils.data.Dataset):
                 w1, w2 = self[x]
                 wav1[i] = w1
                 wav2[i] = w2
-            air_conv = air[torch.randint(0, 214, size=(bat,), dtype=torch.long)]
-            mic_conv = mic[torch.randint(0, 69, size=(bat,), dtype=torch.long)]
-            auga = torch.fft.rfft(wav2, 16384*8, dim=1)
-            wav2 = torch.fft.irfft(auga * air_conv * mic_conv, 16384*8, dim=1)
-            wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
+            
+            # white noise
             wav2 -= wav2.mean(dim=1).unsqueeze(1)
             amp = torch.sqrt((wav2**2).mean(dim=1))
             wav2 = torch.normal(mean=wav2, std=amp.unsqueeze(1)*0.32)
+            
+            # IR filters
+            wav2_freq = torch.fft.rfft(wav2, self.params['fftconv_n'], dim=1)
+            if self.air:
+                wav2_freq *= self.air.random_choose(bat)
+            if self.micirp:
+                wav2_freq *= self.micirp.random_choose(bat)
+            wav2 = torch.fft.irfft(wav2_freq, self.params['fftconv_n'], dim=1)
+            wav2 = wav2[:,self.pad_start:self.pad_start+self.sel_size]
+            
             # normalize volume
             wav1 -= wav1.mean(dim=1).unsqueeze(1)
             wav1 = F.normalize(wav1, p=2, dim=1)
             wav2 = F.normalize(wav2, p=2, dim=1)
+            
+            # Mel spectrogram
             with warnings.catch_warnings():
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
@@ -186,6 +209,8 @@ class MyDataset(torch.utils.data.Dataset):
         wave *= 1/32768
         if not self.augmented:
             return wave[pad_start:pad_start+self.sel_size]
+        
+        # time offset modulation
         pos = torch.randint(0, self.clip_size-self.sel_size, size=(2,))
         wav1 = wave[pad_start+pos[0] : pad_start+self.sel_size+pos[0]]
         wav2 = wave[max(0, pad_start+pos[1]-self.pad_start) : pad_start+self.sel_size+pos[1]]
@@ -310,11 +335,13 @@ class MySampler(torch.utils.data.Sampler):
 def collate_fn(x):
     return x[0]
 
-def build_data_loader(params, data_dir, for_train=True):
+def build_data_loader(params, data_dir, noise_dir, air_dir, micirp_dir, for_train=True):
     num_workers = params.get('num_workers', 2)
     list_csv = params['train_csv'] if for_train else params['validate_csv']
     
-    dataset = MyDataset(train_csv=list_csv, data_dir=data_dir, params=params, for_train=for_train)
+    dataset = MyDataset(train_csv=list_csv, data_dir=data_dir, params=params,
+        noise_dir=noise_dir, air_dir=air_dir, micirp_dir=micirp_dir,
+        for_train=for_train)
     sampler = MySampler(dataset, params['shuffle_size'])
     loader = torch.utils.data.DataLoader(
         dataset,
@@ -337,7 +364,7 @@ if __name__ == '__main__':
     
     mp.set_start_method('spawn')
     params = read_config(args.params)
-    loader = build_data_loader(params, args.data)
+    loader = build_data_loader(params, args.data, None, None, None)
     print('test dataloader for training data')
     for epoch in range(3):
         loader.mysampler.set_epoch(epoch)

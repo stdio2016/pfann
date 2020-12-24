@@ -15,12 +15,15 @@ if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-d', '--data', required=True)
+    args.add_argument('--noise')
+    args.add_argument('--air')
+    args.add_argument('--micirp')
     args.add_argument('-p', '--params', default='configs/default.json')
     args = args.parse_args()
     
     params = simpleutils.read_config(args.params)
     
-    train_data = build_data_loader(params, args.data)
+    train_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp)
     i = 0
     train_data.dataset.output_wav = True
     train_data.sampler.sampler.shuffle = False
