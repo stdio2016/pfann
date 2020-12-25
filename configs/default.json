@@ -6,8 +6,10 @@
   "shuffle_size": 20000,
   "fftconv_n": 32768,
   "noise": {
-    "train": "",
-    "validate": ""
+    "train": "configs/noise_train.csv",
+    "validate": "configs/noise_val.csv",
+    "snr_max": 10,
+    "snr_min": 0
   },
   "micirp": {
     "train": "configs/micirp_train.csv",

@@ -18,6 +18,7 @@ torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
 from simpleutils import get_hash, read_config
 from datautil.audio import get_audio
 from datautil.ir import AIR, MicIRP
+from datautil.noise import NoiseData
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, train_csv, data_dir, noise_dir, air_dir, micirp_dir, params, for_train=True):
@@ -39,6 +40,12 @@ class MyDataset(torch.utils.data.Dataset):
         self.data_dir = Path(data_dir)
         self.params = params
         train_val = 'train' if for_train else 'validate'
+        if noise_dir:
+            self.noise = NoiseData(noise_dir=noise_dir,
+                list_csv=params['noise'][train_val],
+                sample_rate=sample_rate, cache_dir=params['cache_dir'])
+        else:
+            self.noise = None
         if air_dir:
             self.air = AIR(air_dir=air_dir,
                 list_csv=params['air'][train_val],
@@ -95,15 +102,6 @@ class MyDataset(torch.utils.data.Dataset):
         self.segToPart = torch.tensor(self.segToPart)
         self.segPos = torch.tensor(self.segPos)
         self.partToSeg = torch.tensor(self.partToSeg)
-    
-    def load_from_cache(self, hash, frame_offset, num_frames):
-        with open(self.cache_dir / hash, 'rb') as fin:
-            fin.seek(frame_offset * 2)
-            code = fin.read(num_frames * 2)
-        # int16 to float32
-        wave = np.frombuffer(code, dtype=np.int16).astype(np.float32)
-        wave /= 32768
-        return torch.FloatTensor(wave.reshape([1, -1]))
     
     def load_from_hdd(self, i_name):
         i, name = i_name
@@ -176,10 +174,18 @@ class MyDataset(torch.utils.data.Dataset):
                 wav1[i] = w1
                 wav2[i] = w2
             
-            # white noise
+            # background mixing
             wav2 -= wav2.mean(dim=1).unsqueeze(1)
             amp = torch.sqrt((wav2**2).mean(dim=1))
-            wav2 = torch.normal(mean=wav2, std=amp.unsqueeze(1)*0.32)
+            snr_max = self.params['noise']['snr_max']
+            snr_min = self.params['noise']['snr_min']
+            snr = snr_min + torch.rand(bat) * (snr_max - snr_min)
+            if self.noise:
+                noise = self.noise.random_choose(bat, wav2.shape[1])
+                noise_amp = torch.sqrt((noise**2).mean(dim=1))
+                wav2 += noise * (amp / noise_amp * torch.pow(10, -0.05*snr)).unsqueeze(1)
+            else:
+                wav2 = torch.normal(mean=wav2, std=(amp*torch.pow(10, -0.05*snr)).unsqueeze(1))
             
             # IR filters
             wav2_freq = torch.fft.rfft(wav2, self.params['fftconv_n'], dim=1)
