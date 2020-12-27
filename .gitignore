@@ -1,12 +1,13 @@
 # cache files
 __pycache__
-caches/
+caches
 
 # output files
 *.wav
 
 # log files
 dlyt.txt
+runs
 
 # the list is too long
 configs/*.csv

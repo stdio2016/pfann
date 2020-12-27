@@ -50,7 +50,7 @@ class MyF(Module):
         x = x.unsqueeze(1)
         for i, conv in enumerate(self.convs):
             x = conv(x)
-        assert x.shape[2]==x.shape[3]==1, 'output must be 1x1'
+        #assert x.shape[2]==x.shape[3]==1, 'output must be 1x1'
         return x
 
 class MyG(Module):

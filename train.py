@@ -1,10 +1,12 @@
 import argparse
+import datetime
 
 import numpy as np
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
+import tensorboardX
 
 from model import FpNetwork
 import datautil.dataset
@@ -25,7 +27,7 @@ def similarity_loss(y, tau):
     loss = torch.sum(Ls) / -y.shape[0]
     return loss
 
-def train(model, optimizer, train_data, val_data, batch_size, device, params):
+def train(model, optimizer, train_data, val_data, batch_size, device, params, writer):
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
@@ -72,6 +74,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
             pbar.set_description('loss=%f'%lossnum)
             losses.append(lossnum)
         if not params['no_train']:
+            writer.add_scalar('loss', np.mean(losses), epoch)
             print('loss: %f' % np.mean(losses))
 
         model.eval()
@@ -118,7 +121,9 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params):
                 ranks += (A.T >= self_score).sum(dim=0)
             acc = int((ranks == 1).sum())
             print('validate score: %f mrr: %f' % (acc / validate_N, (1/ranks).mean()))
+            writer.add_scalars('validation_score', {'accuracy': acc / validate_N, 'MRR': (1/ranks).mean()}, epoch)
         del A, ranks, self_score, y_embed_aug, y_embed_org, y_embed
+        writer.flush()
 
 def test_train(args):
     params = simpleutils.read_config(args.params)
@@ -137,6 +142,11 @@ def test_train(args):
     batch_size = 640
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T).to(device)
+
+    log_dir = "runs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    writer = tensorboardX.SummaryWriter(log_dir)
+    writer.add_graph(model, torch.zeros([1, F_bin, T]).to(device))
+    writer.flush()
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
     if args.data:
@@ -155,7 +165,7 @@ def test_train(args):
         validate_N = 160
         y_mock = make_false_data(validate_N, F_bin, T)
         val_data = DataLoader(y_mock, batch_size=40//2)
-    train(model, optimizer, train_data, val_data, batch_size, device, params)
+    train(model, optimizer, train_data, val_data, batch_size, device, params, writer)
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
