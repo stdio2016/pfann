@@ -37,6 +37,7 @@ class MyDataset(torch.utils.data.Dataset):
         self.clips_per_song = clips_per_song
         self.augmented = True
         self.output_wav = False
+        self.spec_augment = True
         self.data_dir = Path(data_dir)
         self.params = params
         train_val = 'train' if for_train else 'validate'
@@ -202,12 +203,45 @@ class MyDataset(torch.utils.data.Dataset):
             wav2 = F.normalize(wav2, p=2, dim=1)
             
             # Mel spectrogram
-            with warnings.catch_warnings():
-                # torchaudio is still using deprecated function torch.rfft
-                warnings.simplefilter("ignore")
-                if not self.output_wav:
+            if not self.output_wav:
+                with warnings.catch_warnings():
+                    # torchaudio is still using deprecated function torch.rfft
+                    warnings.simplefilter("ignore")
                     wav1 = torch.log(mel(wav1) + 1e-8)
                     wav2 = torch.log(mel(wav2) + 1e-8)
+                
+                # normalize mean to 0
+                wav1 -= wav1.mean(dim=1).unsqueeze(1)
+                wav2 -= wav2.mean(dim=1).unsqueeze(1)
+                
+                # SpecAugment
+                if self.spec_augment:
+                    cutout_min = self.params['cutout_min']
+                    cutout_max = self.params['cutout_max']
+                    
+                    # cutout
+                    f = wav1.shape[1] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
+                    f = int(f)
+                    f0 = torch.randint(0, wav1.shape[1] - f, (1,))
+                    t = wav1.shape[2] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
+                    t = int(t)
+                    t0 = torch.randint(0, wav1.shape[2] - t, (1,))
+                    wav1[:, f0:f0+f, t0:t0+t] = 0
+                    wav2[:, f0:f0+f, t0:t0+t] = 0
+                    
+                    # frequency masking
+                    f = wav1.shape[1] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
+                    f = int(f)
+                    f0 = torch.randint(0, wav1.shape[1] - f, (1,))
+                    wav1[:, f0:f0+f, :] = 0
+                    wav2[:, f0:f0+f, :] = 0
+                    
+                    # time masking
+                    t = wav1.shape[2] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
+                    t = int(t)
+                    t0 = torch.randint(0, wav1.shape[2] - t, (1,))
+                    wav1[:, :, t0:t0+t] = 0
+                    wav2[:, :, t0:t0+t] = 0
             return torch.stack([wav1, wav2], dim=1)
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index

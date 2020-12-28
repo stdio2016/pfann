@@ -161,6 +161,7 @@ def test_train(args):
     if args.validate:
         val_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=False)
         val_data.mysampler.shuffle = False
+        val_data.mydataset.spec_augment = False
     else:
         validate_N = 160
         y_mock = make_false_data(validate_N, F_bin, T)

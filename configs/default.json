@@ -20,5 +20,7 @@
     "train": "configs/air_train.csv",
     "validate": "configs/air_val.csv",
     "length": 1
-  }
+  },
+  "cutout_min": 0.1,
+  "cutout_max": 0.5
 }
