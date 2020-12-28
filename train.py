@@ -74,7 +74,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             pbar.set_description('loss=%f'%lossnum)
             losses.append(lossnum)
         if not params['no_train']:
-            writer.add_scalar('loss', np.mean(losses), epoch)
+            writer.add_scalar('train/loss', np.mean(losses), epoch)
             print('loss: %f' % np.mean(losses))
 
         model.eval()
@@ -121,7 +121,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
                 ranks += (A.T >= self_score).sum(dim=0)
             acc = int((ranks == 1).sum())
             print('validate score: %f mrr: %f' % (acc / validate_N, (1/ranks).mean()))
-            writer.add_scalars('validation_score', {'accuracy': acc / validate_N, 'MRR': (1/ranks).mean()}, epoch)
+            writer.add_scalar('validation/accuracy', acc / validate_N, epoch)
+            writer.add_scalar('validation/MRR', (1/ranks).mean(), epoch)
         del A, ranks, self_score, y_embed_aug, y_embed_org, y_embed
         writer.flush()
 
