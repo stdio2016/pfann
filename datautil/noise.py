@@ -68,6 +68,7 @@ class NoiseData:
         return None
     
     def save_to_cache(self, list_csv, cache_dir, hash, audio):
+        os.makedirs(cache_dir, exist_ok=True)
         loc = os.path.join(cache_dir, os.path.basename(list_csv) + '.npy')
         loc2 = os.path.join(cache_dir, os.path.basename(list_csv) + '.hash')
         with open(loc2, 'w') as fout:
