@@ -152,6 +152,7 @@ def test_train(args):
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
     if args.data:
         train_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=True)
+        print('training data contains %d samples' % len(train_data.mydataset))
     else:
         data_N = 2000
         x_mock = make_false_data(data_N, F_bin, T)
@@ -163,6 +164,7 @@ def test_train(args):
         val_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=False)
         val_data.mysampler.shuffle = False
         val_data.mydataset.spec_augment = False
+        print('validation data contains %d samples' % len(val_data.mydataset))
     else:
         validate_N = 160
         y_mock = make_false_data(validate_N, F_bin, T)
