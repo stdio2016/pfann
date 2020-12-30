@@ -44,7 +44,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
         if params['no_train']:
             pbar = []
         else:
-            pbar = tqdm(train_data)
+            pbar = tqdm(train_data, ncols=80)
         for x in pbar:
             optimizer.zero_grad()
         
@@ -85,7 +85,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
                 train_data.mysampler.shuffle = False
             if isinstance(train_data.dataset, datautil.dataset.MyDataset):
                 train_data.dataset.augmented = False
-            for x in tqdm(train_data, desc='train data'):
+            for x in tqdm(train_data, desc='train data', ncols=80):
                 x = torch.flatten(x, 0, 1)
                 for xx in torch.split(x, minibatch):
                     y = model(xx.to(device)).cpu()
@@ -95,7 +95,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             acc = 0
             validate_N = 0
             y_embed = []
-            for x in tqdm(val_data, desc='val data'):
+            for x in tqdm(val_data, desc='val data', ncols=80):
                 x = torch.flatten(x, 0, 1)
                 for xx in torch.split(x, minibatch):
                     y = model(xx.to(device)).cpu()
