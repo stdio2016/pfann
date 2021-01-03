@@ -210,10 +210,6 @@ class MyDataset(torch.utils.data.Dataset):
                     wav1 = torch.log(mel(wav1) + 1e-8)
                     wav2 = torch.log(mel(wav2) + 1e-8)
                 
-                # normalize mean to 0
-                wav1 -= wav1.mean(dim=1).unsqueeze(1)
-                wav2 -= wav2.mean(dim=1).unsqueeze(1)
-                
                 # SpecAugment
                 if self.spec_augment:
                     cutout_min = self.params['cutout_min']
