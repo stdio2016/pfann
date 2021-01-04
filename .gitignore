@@ -11,3 +11,6 @@ runs
 
 # the list is too long
 configs/*.csv
+
+# model files
+*.pt

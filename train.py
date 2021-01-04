@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import os
 
 import numpy as np
 from tqdm import tqdm
@@ -125,6 +126,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             writer.add_scalar('validation/MRR', (1/ranks).mean(), epoch)
         del A, ranks, self_score, y_embed_aug, y_embed_org, y_embed
         writer.flush()
+    os.makedirs(params['model_dir'])
+    torch.save(model.state_dict(), os.path.join(params['model_dir'], 'model.pt'))
 
 def test_train(args):
     params = simpleutils.read_config(args.params)
