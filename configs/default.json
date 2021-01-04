@@ -7,6 +7,8 @@
   "batch_size": 640,
   "shuffle_size": 20000,
   "fftconv_n": 32768,
+  "sample_rate": 8000,
+  "pad_start": 1,
   "noise": {
     "train": "configs/noise_train.csv",
     "validate": "configs/noise_val.csv",
