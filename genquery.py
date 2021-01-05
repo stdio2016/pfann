@@ -99,7 +99,7 @@ if __name__ == '__main__':
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('-l', '--length', type=float, default=1)
     args.add_argument('--num', type=int, default=10)
-    args.add_argument('--out')
+    args.add_argument('-o', '--out', required=True)
     args = args.parse_args()
     
     params = simpleutils.read_config(args.params)
@@ -146,7 +146,12 @@ if __name__ == '__main__':
         dataset=gen,
         num_workers=3
     )
+    os.makedirs(args.out, exist_ok=True)
+    fout = open(os.path.join(args.out, 'expected.csv'), 'w', encoding='utf8', newline='\n')
+    writer = csv.writer(fout)
+    writer.writerow(['query', 'answer', 'time'])
     for i, (name,time_offset,sound) in enumerate(tqdm.tqdm(runall)):
-        print(i, name, time_offset)
-        torchaudio.save('gen%d.wav' % i, sound, gen.sample_rate)
-    print('stopping...')
+        writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset)])
+        path = os.path.join(args.out, 'q%04d.wav' % (i+1))
+        torchaudio.save(path, sound, gen.sample_rate)
+    fout.close()
