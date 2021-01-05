@@ -6,8 +6,18 @@
   "cache_dir": "caches",
   "batch_size": 640,
   "shuffle_size": 20000,
+  "clips_per_song": 60,
   "fftconv_n": 32768,
   "sample_rate": 8000,
+  "stft_n": 1024,
+  "stft_hop": 256,
+  "n_mels": 256,
+  "dynamic_range": 80,
+  "f_min": 300,
+  "f_max": 4000,
+  "segment_size": 1,
+  "hop_size": 0.5,
+  "time_offset": 1.2,
   "pad_start": 1,
   "noise": {
     "train": "configs/noise_train.csv",
@@ -26,5 +36,10 @@
     "length": 1
   },
   "cutout_min": 0.1,
-  "cutout_max": 0.5
+  "cutout_max": 0.5,
+  "model": {
+    "d": 128,
+    "h": 1024,
+    "u": 32
+  }
 }

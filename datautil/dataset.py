@@ -22,12 +22,12 @@ from datautil.noise import NoiseData
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, train_csv, data_dir, noise_dir, air_dir, micirp_dir, params, for_train=True):
-        hop_size=0.5
-        clip_size=1.2
-        sample_rate=8000
-        clips_per_song=60
-        sel_size=1
-        pad_start=1
+        hop_size = params['hop_size']
+        clip_size = params['time_offset']
+        sample_rate = params['sample_rate']
+        clips_per_song = params['clips_per_song']
+        sel_size = params['segment_size']
+        pad_start = params['pad_start']
         super(MyDataset, self).__init__()
         self.clip_size = int(clip_size * sample_rate)
         self.sel_size = int(sel_size * sample_rate)
@@ -153,12 +153,12 @@ class MyDataset(torch.utils.data.Dataset):
             torch.set_num_threads(1)
             bat = len(index)
             mel = torchaudio.transforms.MelSpectrogram(
-                sample_rate=8000,
-                n_fft=1024,
-                hop_length=256,
-                f_min=300,
-                f_max=4000,
-                n_mels=256,
+                sample_rate=self.sample_rate,
+                n_fft=self.params['stft_n'],
+                hop_length=self.params['stft_hop'],
+                f_min=self.params['f_min'],
+                f_max=self.params['f_max'],
+                n_mels=self.params['n_mels'],
                 window_fn=torch.hann_window)
             wav1 = torch.zeros([bat, self.sel_size], dtype=torch.float32)
             if not self.augmented:
