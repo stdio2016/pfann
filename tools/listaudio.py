@@ -1,12 +1,25 @@
 import argparse
-import os
-import random
-import miniaudio
-import subprocess
 import csv
 import multiprocessing
-import tqdm
 from multiprocessing import Pool
+import os
+import random
+import subprocess
+
+import miniaudio
+import tqdm
+
+class MyStream(miniaudio.StreamableSource):
+    def __init__(self, name):
+        self.f = open(name, 'rb')
+    def close(self):
+        self.f.close()
+    def read(self, num):
+        return self.f.read(num)
+    def seek(self, offset, origin):
+        origin = 0 if origin == miniaudio.SeekOrigin.START else 1
+        out = self.f.seek(offset, origin)
+        return out != -1
 
 argp = argparse.ArgumentParser()
 argp.add_argument('--folder', required=True)
@@ -36,14 +49,13 @@ def get_audio_length(filename):
         #print('miniaudio cannot decode %s files. Try FFmpeg' % ext)
         return ffmpeg_get_audio_length(filename)
     try:
-        if os.name == 'nt' and not filename.isascii():
-            #print('%s contains non-ascii characters. Need to read by Python first' % filename)
-            with open(filename, 'rb') as fin:
-                code = fin.read()
-            audio = miniaudio.decode(code)
-        else:
-            audio = miniaudio.read_file(filename, True)
-        return audio.duration
+        # streaming to reduce memory usage
+        my = MyStream(filename)
+        stream = miniaudio.stream_any(my, sample_rate=8000, nchannels=1)
+        du = 0
+        for s in stream:
+            du += len(s)
+        return du / 8000
     except miniaudio.DecodeError as x:
         #print('miniaudio cannot decode %s. Try FFmpeg' % filename)
         return ffmpeg_get_audio_length(filename)
