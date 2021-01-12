@@ -67,6 +67,10 @@ class MusicDataset(torch.utils.data.Dataset):
         out = torch.from_numpy(arr)
         wav.append(resampler(out)[strip_head : ])
         wav = torch.cat(wav)
+
+        if wav.shape[0] < self.segment_size:
+            # this "music" is too short and need to be extended
+            wav = F.pad(wav, (0, self.segment_size - wav.shape[0]))
         
         # normalize volume
         wav = wav.unfold(0, self.segment_size, self.hop_size)
