@@ -122,6 +122,7 @@ if __name__ == "__main__":
     lbl = []
     for dat in tqdm.tqdm(loader):
         i, name, wav = dat
+        i = int(i) # i is leaking file handles!
         # batch size should be less than 20 because query contains at most 19 segments
         for batch in DataLoader(wav.squeeze(0), batch_size=16):
             g = batch.to(device)
