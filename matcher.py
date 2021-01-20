@@ -123,6 +123,9 @@ if __name__ == "__main__":
     index2song = np.repeat(np.arange(len(songList)), landmarkKey)
     landmarkKey = np.cumsum(landmarkKey, dtype=np.int64)
     print('database loaded')
+    print('inverse list count:', index.nlist)
+    index.nprobe = 50
+    print('num probes:', index.nprobe)
 
     # doing inference, turn off gradient
     model.eval()
@@ -166,7 +169,11 @@ if __name__ == "__main__":
         dists, ids = index.search(x=embeddings.numpy(), k=top_k)
         scoreboard = {}
         for t in range(ids.shape[0]):
-            for j in range(top_k):
+            if np.all(dists[t] <= 2):
+                last_k = top_k
+            else:
+                last_k = np.argmax(dists[t] > 2)
+            for j in range(last_k):
                 t1 = int(ids[t, j])
                 #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
                 songId = int(index2song[t1])

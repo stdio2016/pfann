@@ -151,7 +151,12 @@ if __name__ == "__main__":
     
     # train indexer
     print('training indexer')
-    index = faiss.IndexFlatIP(d)
+    coarseQuantizer = faiss.IndexFlatIP(d)
+    numCentroids = 200
+    numQuantizers = 64
+    index = faiss.IndexIVFPQ(
+        coarseQuantizer, d, numCentroids, numQuantizers, 8, faiss.METRIC_INNER_PRODUCT)
+    index.train(embeddings.numpy())
     
     # write database
     print('writing database')
