@@ -143,7 +143,7 @@ if __name__ == "__main__":
             for _ in z:
                 lbl.append(i)
             embeddings.append(z)
-        landmarkKey.append(int(wav.shape[0]))
+        landmarkKey.append(int(wav.shape[1]))
     embeddings = torch.cat(embeddings)
     print('total', embeddings.shape[0], 'embeddings')
     #writer = tensorboardX.SummaryWriter()

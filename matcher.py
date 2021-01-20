@@ -1,3 +1,4 @@
+import csv
 import os
 import sys
 import warnings
@@ -89,6 +90,8 @@ if __name__ == "__main__":
     file_list_for_query = sys.argv[1]
     dir_for_db = sys.argv[2]
     result_file = sys.argv[3]
+    result_file2 = os.path.splitext(result_file) # for more detailed output
+    result_file2 = result_file2[0] + '_detail.csv'
     configs = os.path.join(dir_for_db, 'configs.json')
     params = simpleutils.read_config(configs)
 
@@ -108,8 +111,17 @@ if __name__ == "__main__":
     print('model loaded')
     
     print('loading database...')
+    with open(os.path.join(dir_for_db, 'songList.txt'), 'r', encoding='utf8') as fin:
+        songList = []
+        for line in fin:
+            if line.endswith('\n'): line = line[:-1]
+            songList.append(line)
+    
     landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int32)
     index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
+    assert len(songList) == landmarkKey.shape[0]
+    index2song = np.repeat(np.arange(len(songList)), landmarkKey)
+    landmarkKey = np.cumsum(landmarkKey, dtype=np.int64)
     print('database loaded')
 
     # doing inference, turn off gradient
@@ -130,7 +142,10 @@ if __name__ == "__main__":
         n_mels=params['n_mels'],
         window_fn=torch.hann_window).to(device)
     
-    fout = open(result_file, 'w')
+    fout = open(result_file, 'w', encoding='utf8', newline='\n')
+    fout2 = open(result_file2, 'w', encoding='utf8', newline='\n')
+    detail_writer = csv.writer(fout2)
+    detail_writer.writerow(['query', 'answer', 'score', 'time'])
     for dat in tqdm.tqdm(loader):
         embeddings = []
         i, name, wav = dat
@@ -152,12 +167,23 @@ if __name__ == "__main__":
         scoreboard = {}
         for t in range(ids.shape[0]):
             for j in range(top_k):
-                t0 = int(ids[t, j] - t)
-                if t0 in scoreboard:
-                    scoreboard[t0] += float(dists[t, j])
+                t1 = int(ids[t, j])
+                #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
+                songId = int(index2song[t1])
+                t0 = int(landmarkKey[songId-1]) if songId > 0 else 0
+                dt = t1 - t0 - t
+                key = (songId, dt)
+                if key in scoreboard:
+                    scoreboard[key] += float(dists[t, j])
                 else:
-                    scoreboard[t0] = float(dists[t, j])
+                    scoreboard[key] = float(dists[t, j])
         scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
-        scoreboard.sort()
-        print(scoreboard[-1])
+        sco, (ans, tim) = max(scoreboard)
+        ans = songList[ans]
+        tim *= params['hop_size']
+        fout.write('%s\t%s\n' % (name[0], ans))
+        fout.flush()
+        detail_writer.writerow([name[0], ans, sco, tim])
+        fout2.flush()
     fout.close()
+    fout2.close()
