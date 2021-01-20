@@ -89,9 +89,7 @@ if __name__ == "__main__":
     file_list_for_query = sys.argv[1]
     dir_for_db = sys.argv[2]
     result_file = sys.argv[3]
-    configs = 'configs/default.json'
-    if len(sys.argv) >= 5:
-        configs = sys.argv[4]
+    configs = os.path.join(dir_for_db, 'configs.json')
     params = simpleutils.read_config(configs)
 
     d = params['model']['d']
@@ -101,16 +99,16 @@ if __name__ == "__main__":
     segn = int(params['segment_size'] * params['sample_rate'])
     T = (segn + params['stft_hop'] - 1) // params['stft_hop']
     
-    topk = 10
+    top_k = params['indexer']['top_k']
 
     print('loading model...')
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T).to(device)
-    model.load_state_dict(torch.load(os.path.join(params['model_dir'], 'model.pt')))
+    model.load_state_dict(torch.load(os.path.join(dir_for_db, 'model.pt')))
     print('model loaded')
     
     print('loading database...')
-    landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int64)
+    landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int32)
     index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
     print('database loaded')
 
@@ -150,11 +148,10 @@ if __name__ == "__main__":
             z = model(g).cpu()
             embeddings.append(z)
         embeddings = torch.cat(embeddings)
-        dists, ids = index.search(x=embeddings.numpy(), k=topk)
-        print(ids.shape)
+        dists, ids = index.search(x=embeddings.numpy(), k=top_k)
         scoreboard = {}
         for t in range(ids.shape[0]):
-            for j in range(topk):
+            for j in range(top_k):
                 t0 = int(ids[t, j] - t)
                 if t0 in scoreboard:
                     scoreboard[t0] += float(dists[t, j])

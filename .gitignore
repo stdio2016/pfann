@@ -14,3 +14,6 @@ configs/*.csv
 
 # model files
 *.pt
+
+# database files
+db/

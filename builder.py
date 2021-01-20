@@ -149,10 +149,27 @@ if __name__ == "__main__":
     #writer = tensorboardX.SummaryWriter()
     #writer.add_embedding(embeddings, lbl)
     
-    # write database
+    # train indexer
+    print('training indexer')
     index = faiss.IndexFlatIP(d)
+    
+    # write database
+    print('writing database')
     index.add(embeddings.numpy())
     os.makedirs(dir_for_db, exist_ok=True)
     faiss.write_index(index, os.path.join(dir_for_db, 'landmarkValue'))
-    landmarkKey = np.array(landmarkKey, dtype=np.int64)
+    
+    landmarkKey = np.array(landmarkKey, dtype=np.int32)
     landmarkKey.tofile(os.path.join(dir_for_db, 'landmarkKey'))
+    
+    with open(os.path.join(dir_for_db, 'songList.txt'), 'w', encoding='utf8') as fout:
+        for line in dataset.files:
+            fout.write(line + '\n')
+    
+    # write settings
+    with open(os.path.join(dir_for_db, 'configs.json'), 'wb') as fout, open(configs, 'rb') as fin:
+        fout.write(fin.read())
+    
+    # write model
+    with open(os.path.join(dir_for_db, 'model.pt'), 'wb') as fout, open(os.path.join(params['model_dir'], 'model.pt'), 'rb') as fin:
+        fout.write(fin.read())
