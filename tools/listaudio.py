@@ -94,6 +94,12 @@ if __name__ == '__main__':
     if args.sample:
         sound_files = random.sample(sound_files, args.sample)
     with open(args.out, 'w', encoding='utf8', newline='\n') as fout:
-        writer = csv.writer(fout, lineterminator="\r\n")
-        writer.writerow(['file', 'duration'])
-        writer.writerows(sound_files)
+        if args.out.endswith('.csv'):
+            # csv format with duration info
+            writer = csv.writer(fout, lineterminator="\r\n")
+            writer.writerow(['file', 'duration'])
+            writer.writerows(sound_files)
+        else:
+            # plain text list
+            for sound_name, duration in sound_files:
+                fout.write(sound_name + '\n')
