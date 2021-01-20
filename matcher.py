@@ -86,11 +86,12 @@ class MusicDataset(torch.utils.data.Dataset):
 if __name__ == "__main__":
     mp.set_start_method('spawn')
     torch.set_num_threads(1)
-    file_list_for_db = sys.argv[1]
+    file_list_for_query = sys.argv[1]
     dir_for_db = sys.argv[2]
+    result_file = sys.argv[3]
     configs = 'configs/default.json'
-    if len(sys.argv) >= 4:
-        configs = sys.argv[3]
+    if len(sys.argv) >= 5:
+        configs = sys.argv[4]
     params = simpleutils.read_config(configs)
 
     d = params['model']['d']
@@ -99,20 +100,28 @@ if __name__ == "__main__":
     F_bin = params['n_mels']
     segn = int(params['segment_size'] * params['sample_rate'])
     T = (segn + params['stft_hop'] - 1) // params['stft_hop']
+    
+    topk = 10
 
     print('loading model...')
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T).to(device)
     model.load_state_dict(torch.load(os.path.join(params['model_dir'], 'model.pt')))
     print('model loaded')
+    
+    print('loading database...')
+    landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int64)
+    index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
+    print('database loaded')
 
     # doing inference, turn off gradient
     model.eval()
     for param in model.parameters():
         param.requires_grad = False
 
-    dataset = MusicDataset(file_list_for_db, params)
-    loader = DataLoader(dataset, num_workers=4)
+    dataset = MusicDataset(file_list_for_query, params)
+    # no task parallelism
+    loader = DataLoader(dataset, num_workers=0)
     
     mel = torchaudio.transforms.MelSpectrogram(
         sample_rate=params['sample_rate'],
@@ -123,10 +132,9 @@ if __name__ == "__main__":
         n_mels=params['n_mels'],
         window_fn=torch.hann_window).to(device)
     
-    embeddings = []
-    lbl = []
-    landmarkKey = []
+    fout = open(result_file, 'w')
     for dat in tqdm.tqdm(loader):
+        embeddings = []
         i, name, wav = dat
         i = int(i) # i is leaking file handles!
         # batch size should be less than 20 because query contains at most 19 segments
@@ -140,19 +148,19 @@ if __name__ == "__main__":
                 g = mel(g)
             g = torch.log(g + 1e-8)
             z = model(g).cpu()
-            for _ in z:
-                lbl.append(i)
             embeddings.append(z)
-        landmarkKey.append(int(wav.shape[0]))
-    embeddings = torch.cat(embeddings)
-    print('total', embeddings.shape[0], 'embeddings')
-    #writer = tensorboardX.SummaryWriter()
-    #writer.add_embedding(embeddings, lbl)
-    
-    # write database
-    index = faiss.IndexFlatIP(d)
-    index.add(embeddings.numpy())
-    os.makedirs(dir_for_db, exist_ok=True)
-    faiss.write_index(index, os.path.join(dir_for_db, 'landmarkValue'))
-    landmarkKey = np.array(landmarkKey, dtype=np.int64)
-    landmarkKey.tofile(os.path.join(dir_for_db, 'landmarkKey'))
+        embeddings = torch.cat(embeddings)
+        dists, ids = index.search(x=embeddings.numpy(), k=topk)
+        print(ids.shape)
+        scoreboard = {}
+        for t in range(ids.shape[0]):
+            for j in range(topk):
+                t0 = int(ids[t, j] - t)
+                if t0 in scoreboard:
+                    scoreboard[t0] += float(dists[t, j])
+                else:
+                    scoreboard[t0] = float(dists[t, j])
+        scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
+        scoreboard.sort()
+        print(scoreboard[-1])
+    fout.close()
