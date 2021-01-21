@@ -123,9 +123,10 @@ if __name__ == "__main__":
     index2song = np.repeat(np.arange(len(songList)), landmarkKey)
     landmarkKey = np.cumsum(landmarkKey, dtype=np.int64)
     print('database loaded')
-    print('inverse list count:', index.nlist)
-    index.nprobe = 50
-    print('num probes:', index.nprobe)
+    if isinstance(index, faiss.IndexIVF):
+        print('inverse list count:', index.nlist)
+        index.nprobe = 50
+        print('num probes:', index.nprobe)
 
     # doing inference, turn off gradient
     model.eval()
@@ -148,7 +149,7 @@ if __name__ == "__main__":
     fout = open(result_file, 'w', encoding='utf8', newline='\n')
     fout2 = open(result_file2, 'w', encoding='utf8', newline='\n')
     detail_writer = csv.writer(fout2)
-    detail_writer.writerow(['query', 'answer', 'score', 'time'])
+    detail_writer.writerow(['query', 'answer', 'score', 'time', 'part_scores'])
     for dat in tqdm.tqdm(loader):
         embeddings = []
         i, name, wav = dat
@@ -168,6 +169,7 @@ if __name__ == "__main__":
         embeddings = torch.cat(embeddings)
         dists, ids = index.search(x=embeddings.numpy(), k=top_k)
         scoreboard = {}
+        upcount = {}
         for t in range(ids.shape[0]):
             if np.all(dists[t] <= 2):
                 last_k = top_k
@@ -182,15 +184,18 @@ if __name__ == "__main__":
                 key = (songId, dt)
                 if key in scoreboard:
                     scoreboard[key] += float(dists[t, j])
+                    upcount[key].append(float(dists[t, j]))
                 else:
                     scoreboard[key] = float(dists[t, j])
+                    upcount[key] = [float(dists[t, j])]
         scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
         sco, (ans, tim) = max(scoreboard)
+        upsco = upcount[ans, tim]
         ans = songList[ans]
         tim *= params['hop_size']
         fout.write('%s\t%s\n' % (name[0], ans))
         fout.flush()
-        detail_writer.writerow([name[0], ans, sco, tim])
+        detail_writer.writerow([name[0], ans, sco, tim, upsco])
         fout2.flush()
     fout.close()
     fout2.close()
