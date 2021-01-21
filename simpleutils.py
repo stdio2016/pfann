@@ -12,7 +12,7 @@ class Timing():
         self.t = time.time()
         self.entered = True
     def __exit__(self, *ignored):
-        showRunTime(self.name)
+        self.showRunTime(self.name)
     def showRunTime(self, name):
         print(self.name, ':', time.time() - self.t, 's')
 
