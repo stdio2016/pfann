@@ -10,11 +10,19 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import torchaudio
 import tqdm
+import scipy.signal
 
 import simpleutils
 from datautil.audio import get_audio
 from datautil.ir import AIR, MicIRP
 from datautil.noise import NoiseData
+
+def biquad_faster(waveform, b0, b1, b2, a0, a1, a2):
+    waveform = waveform.numpy()
+    b = np.array([b0, b1, b2], dtype=waveform.dtype)
+    a = np.array([a0, a1, a2], dtype=waveform.dtype)
+    return torch.from_numpy(scipy.signal.lfilter(b, a, waveform))
+torchaudio.functional.biquad = biquad_faster
 
 class QueryGen(torch.utils.data.Dataset):
     def __init__(self, music_dir, music_list, noise, air, micirp, query_len, num_queries, params):
@@ -37,6 +45,7 @@ class QueryGen(torch.utils.data.Dataset):
         # crop a music clip
         sel_smp = int(smprate * self.query_len)
         pad_smp = int(smprate * self.pad_start)
+        hop_smp = int(smprate * self.params['hop_size'])
         if audio.shape[1] >= sel_smp:
             time_offset = torch.randint(low=0, high=audio.shape[1]-sel_smp, size=(1,))
             audio = audio[:, max(0,time_offset-pad_smp):time_offset+sel_smp]
@@ -60,13 +69,17 @@ class QueryGen(torch.utils.data.Dataset):
         
         # background mixing
         audio -= audio.mean()
-        amp = torch.sqrt((audio**2).mean())
+        # because our model cannot hear <300Hz sound
+        audio_hi = torchaudio.functional.bass_biquad(audio, self.sample_rate, -24, self.params['f_min'])
+        amp = torch.sqrt((audio_hi**2).mean())
         snr_max = self.params['noise']['snr_max']
         snr_min = self.params['noise']['snr_min']
         snr = snr_min + torch.rand(1) * (snr_max - snr_min)
         if self.noise:
             noise = self.noise.random_choose(1, audio.shape[0])[0]
-            noise_amp = torch.sqrt((noise**2).mean())
+            # because our model cannot hear <300Hz sound
+            noise_hi = torchaudio.functional.bass_biquad(noise, self.sample_rate, -24, self.params['f_min'])
+            noise_amp = torch.sqrt((noise_hi**2).mean())
             audio += noise * (amp / noise_amp * torch.pow(10, -0.05*snr))
         else:
             audio = torch.normal(mean=audio, std=(amp*torch.pow(10, -0.05*snr)))
@@ -83,7 +96,7 @@ class QueryGen(torch.utils.data.Dataset):
         # normalize volume
         audio = F.normalize(audio, p=np.inf, dim=0)
         
-        return name, time_offset/smprate, audio
+        return name, time_offset/smprate, audio, snr
     
     def __len__(self):
         return self.num_queries
@@ -149,9 +162,9 @@ if __name__ == '__main__':
     os.makedirs(args.out, exist_ok=True)
     fout = open(os.path.join(args.out, 'expected.csv'), 'w', encoding='utf8', newline='\n')
     writer = csv.writer(fout)
-    writer.writerow(['query', 'answer', 'time'])
-    for i, (name,time_offset,sound) in enumerate(tqdm.tqdm(runall)):
-        writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset)])
+    writer.writerow(['query', 'answer', 'time', 'snr'])
+    for i, (name,time_offset,sound,snr) in enumerate(tqdm.tqdm(runall)):
+        writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset), float(snr)])
         path = os.path.join(args.out, 'q%04d.wav' % (i+1))
         torchaudio.save(path, sound, gen.sample_rate)
     fout.close()
