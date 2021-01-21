@@ -86,7 +86,6 @@ class MusicDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
-    torch.set_num_threads(1)
     file_list_for_query = sys.argv[1]
     dir_for_db = sys.argv[2]
     result_file = sys.argv[3]
@@ -199,3 +198,5 @@ if __name__ == "__main__":
         fout2.flush()
     fout.close()
     fout2.close()
+else:
+    torch.set_num_threads(1)
