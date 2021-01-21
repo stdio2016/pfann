@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import warnings
 
@@ -167,14 +168,11 @@ if __name__ == "__main__":
     landmarkKey = np.array(landmarkKey, dtype=np.int32)
     landmarkKey.tofile(os.path.join(dir_for_db, 'landmarkKey'))
     
-    with open(os.path.join(dir_for_db, 'songList.txt'), 'w', encoding='utf8') as fout:
-        for line in dataset.files:
-            fout.write(line + '\n')
+    shutil.copyfile(file_list_for_db, os.path.join(dir_for_db, 'songList.txt'))
     
     # write settings
-    with open(os.path.join(dir_for_db, 'configs.json'), 'wb') as fout, open(configs, 'rb') as fin:
-        fout.write(fin.read())
+    shutil.copyfile(configs, os.path.join(dir_for_db, 'configs.json'))
     
     # write model
-    with open(os.path.join(dir_for_db, 'model.pt'), 'wb') as fout, open(os.path.join(params['model_dir'], 'model.pt'), 'rb') as fin:
-        fout.write(fin.read())
+    shutil.copyfile(os.path.join(params['model_dir'], 'model.pt'),
+        os.path.join(dir_for_db, 'model.pt'))
