@@ -2,7 +2,7 @@
   "train_csv": "configs/train.csv",
   "validate_csv": "configs/validate.csv",
   "test_csv": "configs/test.csv",
-  "model_dir": "n640d128",
+  "model_dir": "n640d64",
   "cache_dir": "caches",
   "batch_size": 640,
   "shuffle_size": 2000,
