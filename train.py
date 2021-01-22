@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 
 import numpy as np
 from tqdm import tqdm
@@ -138,12 +139,13 @@ def test_train(args):
     torch.cuda.manual_seed(123)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
-    d = 128
-    h = 1024
-    u = 32
-    F_bin = 256
-    T = 32
-    batch_size = 640
+    d = params['model']['d']
+    h = params['model']['h']
+    u = params['model']['u']
+    F_bin = params['n_mels']
+    segn = int(params['segment_size'] * params['sample_rate'])
+    T = (segn + params['stft_hop'] - 1) // params['stft_hop']
+    batch_size = params['batch_size']
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T).to(device)
 
@@ -175,6 +177,7 @@ def test_train(args):
     train(model, optimizer, train_data, val_data, batch_size, device, params, writer)
 
 if __name__ == "__main__":
+    torch.set_deterministic(True)
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-d', '--data')
