@@ -5,7 +5,7 @@
   "model_dir": "n640d64",
   "cache_dir": "caches",
   "batch_size": 640,
-  "shuffle_size": 2000,
+  "shuffle_size": 20000,
   "clips_per_song": 60,
   "fftconv_n": 32768,
   "sample_rate": 8000,
