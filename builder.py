@@ -86,7 +86,6 @@ class MusicDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
-    torch.set_num_threads(1)
     file_list_for_db = sys.argv[1]
     dir_for_db = sys.argv[2]
     configs = 'configs/default.json'
@@ -152,12 +151,10 @@ if __name__ == "__main__":
     
     # train indexer
     print('training indexer')
-    coarseQuantizer = faiss.IndexFlatIP(d)
-    numCentroids = 200
-    numQuantizers = 64
-    index = faiss.IndexIVFPQ(
-        coarseQuantizer, d, numCentroids, numQuantizers, 8, faiss.METRIC_INNER_PRODUCT)
-    index.train(embeddings.numpy())
+    index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
+    if not index.is_trained:
+        index.train(embeddings.numpy())
+    #index = faiss.IndexFlatIP(d)
     
     # write database
     print('writing database')
@@ -176,3 +173,5 @@ if __name__ == "__main__":
     # write model
     shutil.copyfile(os.path.join(params['model_dir'], 'model.pt'),
         os.path.join(dir_for_db, 'model.pt'))
+else:
+    torch.set_num_threads(1)
