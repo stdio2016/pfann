@@ -1,4 +1,5 @@
 import csv
+import math
 import os
 import sys
 import warnings
@@ -10,6 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import torch.multiprocessing as mp
+import torchvision
 import tensorboardX
 import tqdm
 
@@ -93,6 +95,8 @@ if __name__ == "__main__":
     result_file2 = result_file2[0] + '_detail.csv'
     configs = os.path.join(dir_for_db, 'configs.json')
     params = simpleutils.read_config(configs)
+    
+    visualize = False
 
     d = params['model']['d']
     h = params['model']['h']
@@ -151,6 +155,8 @@ if __name__ == "__main__":
     detail_writer.writerow(['query', 'answer', 'score', 'time', 'part_scores'])
     for dat in tqdm.tqdm(loader):
         embeddings = []
+        grads = []
+        specs = []
         i, name, wav = dat
         i = int(i) # i is leaking file handles!
         # batch size should be less than 20 because query contains at most 19 segments
@@ -163,9 +169,19 @@ if __name__ == "__main__":
                 warnings.simplefilter("ignore")
                 g = mel(g)
             g = torch.log(g + 1e-8)
+            if visualize:
+                g.requires_grad = True
             z = model(g).cpu()
+            if visualize:
+                z.backward(z)
+                z.detach_()
+                grads.append(g.grad.cpu())
+                specs.append(g.detach().cpu())
             embeddings.append(z)
         embeddings = torch.cat(embeddings)
+        if visualize:
+            grads = torch.cat(grads)
+            specs = torch.cat(specs)
         dists, ids = index.search(x=embeddings.numpy(), k=top_k)
         scoreboard = {}
         upcount = {}
@@ -192,6 +208,20 @@ if __name__ == "__main__":
         upsco = upcount[ans, tim]
         ans = songList[ans]
         tim *= params['hop_size']
+        if visualize:
+            grads = torch.abs(grads)
+            grads = torch.nn.functional.normalize(grads, p=np.inf)
+            grads = grads.transpose(0, 1).flatten(1, 2)
+            grads = grads.repeat(3, 1, 1)
+            specs = specs.transpose(0, 1).flatten(1, 2)
+            grads[1] = specs - math.log(1e-6)
+            grads[1] /= torch.max(grads[1])
+            grads[0] = torch.nn.functional.relu(grads[0])
+            grads[1] *= 1 - grads[0]
+            grads[2] = 0
+            grads = torch.flip(grads, [1])
+            grads[:,:,::32] = 0
+            torchvision.utils.save_image(grads, '%s.png' % os.path.basename(name[0]))
         fout.write('%s\t%s\n' % (name[0], ans))
         fout.flush()
         detail_writer.writerow([name[0], ans, sco, tim, upsco])
