@@ -142,12 +142,13 @@ def test_train(args):
     d = params['model']['d']
     h = params['model']['h']
     u = params['model']['u']
+    fuller = params['model']['fuller'] if 'fuller' in params['model'] else False
     F_bin = params['n_mels']
     segn = int(params['segment_size'] * params['sample_rate'])
     T = (segn + params['stft_hop'] - 1) // params['stft_hop']
     batch_size = params['batch_size']
     device = torch.device('cuda')
-    model = FpNetwork(d, h, u, F_bin, T).to(device)
+    model = FpNetwork(d, h, u, F_bin, T, fuller=fuller).to(device)
 
     log_dir = "runs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = tensorboardX.SummaryWriter(log_dir)
