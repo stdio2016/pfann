@@ -3,6 +3,7 @@ __pycache__
 caches
 
 # output files
+*.mp3
 *.wav
 
 # log files
@@ -18,3 +19,7 @@ lists/
 
 # database files
 db/
+
+# visualize
+*.wav.png
+*.mp3.png
