@@ -183,30 +183,51 @@ if __name__ == "__main__":
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
-        dists, ids = index.search(x=embeddings.numpy(), k=top_k)
-        scoreboard = {}
-        upcount = {}
-        for t in range(ids.shape[0]):
-            if np.all(dists[t] <= 2):
-                last_k = top_k
-            else:
-                last_k = np.argmax(dists[t] > 2)
-            for j in range(last_k):
-                t1 = int(ids[t, j])
-                #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
-                songId = int(index2song[t1])
-                t0 = int(landmarkKey[songId-1]) if songId > 0 else 0
-                dt = t1 - t0 - t
-                key = (songId, dt)
-                if key in scoreboard:
-                    scoreboard[key] += float(dists[t, j])
-                    upcount[key].append(float(dists[t, j]))
+        if top_k == -1:
+            # optimize for exhaustive search
+            arr = faiss.vector_to_array(index.xb).reshape([index.ntotal, d])
+            dists = embeddings.numpy() @ arr.T
+            scoreboard = np.zeros(index.ntotal + len(songList) * embeddings.shape[0])
+            shift = index2song * embeddings.shape[0] + np.arange(index.ntotal)
+            for t in range(embeddings.shape[0]):
+                scoreboard[shift + (embeddings.shape[0] - t)] += dists[t]
+            t1_s = np.argmax(scoreboard)
+            sco = scoreboard[t1_s]
+            t1 = np.searchsorted(shift, t1_s, side='right') - 1
+            ans = index2song[t1]
+            t0 = int(landmarkKey[ans-1]) if ans > 0 else 0
+            t0_s = shift[t0]
+            tim = t1_s - t0_s - embeddings.shape[0]
+            upsco = []
+            for t in range(embeddings.shape[0]):
+                t2 = t0 + tim + t
+                if t0 <= t2 < int(landmarkKey[ans]):
+                    upsco.append(float(dists[t, t2]))
+        else:
+            dists, ids = index.search(x=embeddings.numpy(), k=top_k)
+            scoreboard = {}
+            upcount = {}
+            for t in range(ids.shape[0]):
+                if np.all(dists[t] <= 2):
+                    last_k = top_k
                 else:
-                    scoreboard[key] = float(dists[t, j])
-                    upcount[key] = [float(dists[t, j])]
-        scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
-        sco, (ans, tim) = max(scoreboard)
-        upsco = upcount[ans, tim]
+                    last_k = np.argmax(dists[t] > 2)
+                for j in range(last_k):
+                    t1 = int(ids[t, j])
+                    #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
+                    songId = int(index2song[t1])
+                    t0 = int(landmarkKey[songId-1]) if songId > 0 else 0
+                    dt = t1 - t0 - t
+                    key = (songId, dt)
+                    if key in scoreboard:
+                        scoreboard[key] += float(dists[t, j])
+                        upcount[key].append(float(dists[t, j]))
+                    else:
+                        scoreboard[key] = float(dists[t, j])
+                        upcount[key] = [float(dists[t, j])]
+            scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
+            sco, (ans, tim) = max(scoreboard)
+            upsco = upcount[ans, tim]
         ans = songList[ans]
         tim *= params['hop_size']
         if visualize:
