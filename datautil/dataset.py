@@ -3,6 +3,7 @@ import csv
 from pathlib import Path
 import warnings
 
+import scipy.signal
 import tqdm
 import torch
 import torch.fft
@@ -19,6 +20,13 @@ from simpleutils import get_hash, read_config
 from datautil.audio import get_audio
 from datautil.ir import AIR, MicIRP
 from datautil.noise import NoiseData
+
+def biquad_faster(waveform, b0, b1, b2, a0, a1, a2):
+    waveform = waveform.numpy()
+    b = np.array([b0, b1, b2], dtype=waveform.dtype)
+    a = np.array([a0, a1, a2], dtype=waveform.dtype)
+    return torch.from_numpy(scipy.signal.lfilter(b, a, waveform))
+torchaudio.functional.biquad = biquad_faster
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, train_csv, data_dir, noise_dir, air_dir, micirp_dir, params, for_train=True):
@@ -177,13 +185,26 @@ class MyDataset(torch.utils.data.Dataset):
             
             # background mixing
             wav2 -= wav2.mean(dim=1).unsqueeze(1)
-            amp = torch.sqrt((wav2**2).mean(dim=1))
+
+            # our model cannot hear <300Hz sound
+            if self.params['noise'].get('snr_only_in_f_range', False):
+                wav2_hi = torchaudio.functional.bass_biquad(wav2, self.sample_rate, -24, self.params['f_min'])
+                amp = torch.sqrt((wav2_hi**2).mean(dim=1))
+            else:
+                amp = torch.sqrt((wav2**2).mean(dim=1))
             snr_max = self.params['noise']['snr_max']
             snr_min = self.params['noise']['snr_min']
             snr = snr_min + torch.rand(bat) * (snr_max - snr_min)
             if self.noise:
                 noise = self.noise.random_choose(bat, wav2.shape[1])
-                noise_amp = torch.sqrt((noise**2).mean(dim=1))
+
+                # our model cannot hear <300Hz sound
+                if self.params['noise'].get('snr_only_in_f_range', False):
+                    noise_hi = torchaudio.functional.bass_biquad(noise, self.sample_rate, -24, self.params['f_min'])
+                    noise_amp = torch.sqrt((noise_hi**2).mean(dim=1))
+                else:
+                    noise_amp = torch.sqrt((noise**2).mean(dim=1))
+
                 wav2 += noise * (amp / noise_amp * torch.pow(10, -0.05*snr)).unsqueeze(1)
             else:
                 wav2 = torch.normal(mean=wav2, std=(amp*torch.pow(10, -0.05*snr)).unsqueeze(1))
