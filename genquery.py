@@ -69,19 +69,23 @@ class QueryGen(torch.utils.data.Dataset):
         
         # background mixing
         audio -= audio.mean()
-        # because our model cannot hear <300Hz sound
-        audio_hi = torchaudio.functional.bass_biquad(audio, self.sample_rate, -24, self.params['f_min'])
-        #amp = torch.sqrt((audio_hi**2).mean())
-        amp = torch.sqrt((audio**2).mean())
+        # our model cannot hear <300Hz sound
+        if self.params['noise'].get('snr_only_in_f_range', False):
+            audio_hi = torchaudio.functional.bass_biquad(audio, self.sample_rate, -24, self.params['f_min'])
+            amp = torch.sqrt((audio_hi**2).mean())
+        else:
+            amp = torch.sqrt((audio**2).mean())
         snr_max = self.params['noise']['snr_max']
         snr_min = self.params['noise']['snr_min']
         snr = snr_min + torch.rand(1) * (snr_max - snr_min)
         if self.noise:
             noise = self.noise.random_choose(1, audio.shape[0])[0]
-            # because our model cannot hear <300Hz sound
-            noise_hi = torchaudio.functional.bass_biquad(noise, self.sample_rate, -24, self.params['f_min'])
-            #noise_amp = torch.sqrt((noise_hi**2).mean())
-            noise_amp = torch.sqrt((noise**2).mean())
+            # our model cannot hear <300Hz sound
+            if self.params['noise'].get('snr_only_in_f_range', False):
+                noise_hi = torchaudio.functional.bass_biquad(noise, self.sample_rate, -24, self.params['f_min'])
+                noise_amp = torch.sqrt((noise_hi**2).mean())
+            else:
+                noise_amp = torch.sqrt((noise**2).mean())
             audio += noise * (amp / noise_amp * torch.pow(10, -0.05*snr))
         else:
             audio = torch.normal(mean=audio, std=(amp*torch.pow(10, -0.05*snr)))
