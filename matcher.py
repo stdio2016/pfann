@@ -172,12 +172,13 @@ if __name__ == "__main__":
             g = torch.log(g + 1e-8)
             if visualize:
                 g.requires_grad = True
-            z = model(g).cpu()
+            z = model.forward(g, norm=False).cpu()
             if visualize:
                 z.backward(z)
                 z.detach_()
                 grads.append(g.grad.cpu())
                 specs.append(g.detach().cpu())
+            z = torch.nn.functional.normalize(z, p=2)
             embeddings.append(z)
         embeddings = torch.cat(embeddings)
         if visualize:

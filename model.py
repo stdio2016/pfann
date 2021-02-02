@@ -69,13 +69,14 @@ class MyG(Module):
         self.elu = ELU()
         self.linear2 = Conv1d(d * u, d, kernel_size=(1,), groups=d)
     
-    def forward(self, x):
+    def forward(self, x, norm=True):
         x = x.reshape([-1, self.h, 1])
         x = self.linear1(x)
         x = self.elu(x)
         x = self.linear2(x)
         x = x.reshape([-1, self.d])
-        x = torch.nn.functional.normalize(x, p=2.0)
+        if norm:
+            x = torch.nn.functional.normalize(x, p=2.0)
         return x
 
 class FpNetwork(Module):
@@ -84,7 +85,7 @@ class FpNetwork(Module):
         self.f = MyF(d, h, u, F, T, fuller=fuller)
         self.g = MyG(d, h, u)
     
-    def forward(self, x):
+    def forward(self, x, norm=True):
         x = self.f(x)
-        x = self.g(x)
+        x = self.g(x, norm=norm)
         return x
