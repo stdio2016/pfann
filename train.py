@@ -165,7 +165,7 @@ def test_train(args):
         x_mock = make_false_data(data_N, F_bin, T)
         train_data = DataLoader(x_mock, batch_size=batch_size//2, shuffle=True)
     
-    optimizer = optim.Lamb(model.parameters(), lr=1e-4 * batch_size/640)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4 * batch_size/640)
     
     if args.validate:
         val_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=False)
