@@ -268,7 +268,15 @@ class MyDataset(torch.utils.data.Dataset):
             return wave[pad_start:pad_start+self.sel_size]
         
         # time offset modulation
-        pos = torch.randint(0, self.clip_size-self.sel_size, size=(2,))
+        if self.params.get('time_shift_type', 'triangle') == 'triangle':
+            pos = torch.randint(0, self.clip_size-self.sel_size, size=(2,))
+        else:
+            shft = int(torch.randint(0, self.clip_size-self.sel_size, size=(1,)))
+            mov = torch.randint(0, self.clip_size-self.sel_size-shft, size=(1,))
+            if torch.rand(1) > 0.5:
+                pos = mov, shft+mov
+            else:
+                pos = shft+mov, mov
         wav1 = wave[pad_start+pos[0] : pad_start+self.sel_size+pos[0]]
         wav2 = wave[max(0, pad_start+pos[1]-self.pad_start) : pad_start+self.sel_size+pos[1]]
         wav2 = F.pad(wav2, (self.pad_start+self.sel_size-len(wav2), 0))
