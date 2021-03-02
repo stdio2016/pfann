@@ -34,6 +34,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+            T_max=100//2, eta_min=1e-7)
     for epoch in range(100):
         model.train()
         tau = 0.05
@@ -126,6 +128,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             print('validate score: %f mrr: %f' % (acc / validate_N, (1/ranks).mean()))
             writer.add_scalar('validation/accuracy', acc / validate_N, epoch)
             writer.add_scalar('validation/MRR', (1/ranks).mean(), epoch)
+        scheduler.step()
         del A, ranks, self_score, y_embed_aug, y_embed_org, y_embed
         writer.flush()
     os.makedirs(params['model_dir'], exist_ok=True)
