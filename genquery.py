@@ -167,10 +167,13 @@ if __name__ == '__main__':
     )
     os.makedirs(args.out, exist_ok=True)
     fout = open(os.path.join(args.out, 'expected.csv'), 'w', encoding='utf8', newline='\n')
+    fout2 = open(os.path.join(args.out, 'list.txt'), 'w', encoding='utf8')
     writer = csv.writer(fout)
     writer.writerow(['query', 'answer', 'time', 'snr'])
     for i, (name,time_offset,sound,snr) in enumerate(tqdm.tqdm(runall)):
         writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset), float(snr)])
         path = os.path.join(args.out, 'q%04d.wav' % (i+1))
         torchaudio.save(path, sound, gen.sample_rate)
+        fout2.write(path + '\n')
     fout.close()
+    fout2.close()
