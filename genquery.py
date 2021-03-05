@@ -92,8 +92,10 @@ class QueryGen(torch.utils.data.Dataset):
         
         # IR filters
         audio_freq = torch.fft.rfft(audio, self.params['fftconv_n'])
+        reverb = ''
         if self.air:
-            audio_freq *= self.air.random_choose(1)[0]
+            aira, reverb = self.air.random_choose_name()
+            audio_freq *= aira
         if self.micirp:
             audio_freq *= self.micirp.random_choose(1)[0]
         audio = torch.fft.irfft(audio_freq, self.params['fftconv_n'])
@@ -102,7 +104,7 @@ class QueryGen(torch.utils.data.Dataset):
         # normalize volume
         audio = F.normalize(audio, p=np.inf, dim=0)
         
-        return name, time_offset/smprate, audio, snr
+        return name, time_offset/smprate, audio, snr, reverb
     
     def __len__(self):
         return self.num_queries
@@ -169,9 +171,9 @@ if __name__ == '__main__':
     fout = open(os.path.join(args.out, 'expected.csv'), 'w', encoding='utf8', newline='\n')
     fout2 = open(os.path.join(args.out, 'list.txt'), 'w', encoding='utf8')
     writer = csv.writer(fout)
-    writer.writerow(['query', 'answer', 'time', 'snr'])
-    for i, (name,time_offset,sound,snr) in enumerate(tqdm.tqdm(runall)):
-        writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset), float(snr)])
+    writer.writerow(['query', 'answer', 'time', 'snr', 'reverb'])
+    for i, (name,time_offset,sound,snr,reverb) in enumerate(tqdm.tqdm(runall)):
+        writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset), float(snr), reverb[0]])
         path = os.path.join(args.out, 'q%04d.wav' % (i+1))
         torchaudio.save(path, sound, gen.sample_rate)
         fout2.write(path + '\n')
