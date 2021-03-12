@@ -102,7 +102,9 @@ class QueryGen(torch.utils.data.Dataset):
         audio = audio[pad_smp:pad_smp+sel_smp]
         
         # normalize volume
-        audio = F.normalize(audio, p=np.inf, dim=0)
+        #audio = F.normalize(audio, p=np.inf, dim=0)
+        audio = audio / 3
+        audio = torch.clip(audio, -1, 1)
         
         return name, time_offset/smprate, audio, snr, reverb
     
