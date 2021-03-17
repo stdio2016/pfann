@@ -79,7 +79,7 @@ class MusicDataset(torch.utils.data.Dataset):
         # normalize volume
         wav = wav.unfold(0, self.segment_size, self.hop_size)
         wav = wav - wav.mean(dim=1).unsqueeze(1)
-        wav = F.normalize(wav, p=2, dim=1)
+        #wav = F.normalize(wav, p=2, dim=1)
         
         return index, self.files[index], wav
     
