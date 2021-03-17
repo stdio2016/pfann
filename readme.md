@@ -72,5 +72,20 @@ python tools/traintestsplit.py --csv configs/air.csv --train configs/air_train.c
 ## Train
 
 ```
-python train.py -d /path/to/fma_medium/ --validate
+python train.py -d /path/to/fma_medium/ --noise /path/to/audioset/ --air /path/to/AIR_1_4/ --micirp /path/to/micirp/ --param configs/default.json --validate -w3
+```
+
+## Generate query
+```
+python genquery.py -d /path/to/fma_medium/ --noise /path/to/audioset/ --micirp /path/to/micirp/ --air /path/to/AIR_1_4/ --num 2000 --out /path/to/query6s/ --len 6
+```
+
+## Builder
+```
+python builder.py /path/to/music_list.txt /path/to/db configs/default.json
+```
+
+## Matcher
+```
+python matcher.py /path/to/query_list.txt /path/to/db /path/to/result.txt
 ```
