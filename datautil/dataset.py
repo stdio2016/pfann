@@ -172,7 +172,6 @@ class MyDataset(torch.utils.data.Dataset):
             if not self.augmented:
                 for i,x in enumerate(index):
                     wav1[i] = self[x]
-                wav1 /= 3
                 with warnings.catch_warnings():
                     # torchaudio is still using deprecated function torch.rfft
                     warnings.simplefilter("ignore")
@@ -221,10 +220,8 @@ class MyDataset(torch.utils.data.Dataset):
             
             # normalize volume
             wav1 -= wav1.mean(dim=1).unsqueeze(1)
-            #wav1 = F.normalize(wav1, p=2, dim=1)
-            #wav2 = F.normalize(wav2, p=2, dim=1)
-            wav1 /= 3
-            wav2 /= 3
+            wav1 = F.normalize(wav1, p=2, dim=1)
+            wav2 = F.normalize(wav2, p=2, dim=1)
             
             # Mel spectrogram
             if not self.output_wav:
