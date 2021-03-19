@@ -172,6 +172,11 @@ class MyDataset(torch.utils.data.Dataset):
             if not self.augmented:
                 for i,x in enumerate(index):
                     wav1[i] = self[x]
+
+                # normalize volume
+                wav1 -= wav1.mean(dim=1).unsqueeze(1)
+                wav1 = F.normalize(wav1, p=2, dim=1)
+
                 with warnings.catch_warnings():
                     # torchaudio is still using deprecated function torch.rfft
                     warnings.simplefilter("ignore")
