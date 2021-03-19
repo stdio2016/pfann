@@ -34,8 +34,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
-            T_max=100//2, eta_min=1e-7)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
+            T_0=100, eta_min=1e-7)
     for epoch in range(100):
         model.train()
         tau = 0.05
