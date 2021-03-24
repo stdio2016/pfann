@@ -153,6 +153,8 @@ if __name__ == "__main__":
     # train indexer
     print('training indexer')
     index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
+    embeddings.numpy().tofile(os.path.join(dir_for_db, 'embeddings'))
+    
     if not index.is_trained:
         index.train(embeddings.numpy())
     #index = faiss.IndexFlatIP(d)
