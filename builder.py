@@ -156,6 +156,7 @@ if __name__ == "__main__":
     # train indexer
     print('training indexer')
     index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
+    os.makedirs(dir_for_db, exist_ok=True)
     embeddings.numpy().tofile(os.path.join(dir_for_db, 'embeddings'))
     
     if not index.is_trained:
@@ -165,7 +166,6 @@ if __name__ == "__main__":
     # write database
     print('writing database')
     index.add(embeddings.numpy())
-    os.makedirs(dir_for_db, exist_ok=True)
     faiss.write_index(index, os.path.join(dir_for_db, 'landmarkValue'))
     
     landmarkKey = np.array(landmarkKey, dtype=np.int32)
