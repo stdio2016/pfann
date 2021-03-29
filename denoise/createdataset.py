@@ -148,14 +148,14 @@ def gen_for(train_val, args, params):
     os.makedirs(args.out, exist_ok=True)
     fout = open(os.path.join(args.out, 'denoise_'+train_val+'.csv'), 'w', encoding='utf8', newline='\n')
     writer = csv.writer(fout)
-    writer.writerow(['mix_path', 'music_path', 'noise_path'])
+    writer.writerow(['mix_path', 'music_path', 'noise_path', 'duration'])
     os.makedirs(os.path.join(args.out, 'music'), exist_ok=True)
     os.makedirs(os.path.join(args.out, 'mix'), exist_ok=True)
     os.makedirs(os.path.join(args.out, 'noise'), exist_ok=True)
     for i, (name,music,noise,mix) in enumerate(tqdm.tqdm(runall)):
         name = os.path.split(name[0])[1]
         name = os.path.splitext(name)[0] + '.wav'
-        writer.writerow(['music/'+name, 'mix/'+name, 'noise/'+name])
+        writer.writerow(['music/'+name, 'mix/'+name, 'noise/'+name, float(args.length)])
         
         torchaudio.save(os.path.join(args.out, 'music', name), music, gen.sample_rate)
         torchaudio.save(os.path.join(args.out, 'mix', name), mix, gen.sample_rate)
