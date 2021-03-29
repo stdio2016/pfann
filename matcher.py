@@ -93,6 +93,7 @@ if __name__ == "__main__":
     result_file = sys.argv[3]
     result_file2 = os.path.splitext(result_file) # for more detailed output
     result_file2 = result_file2[0] + '_detail.csv'
+    result_file_score = result_file + '.bin'
     configs = os.path.join(dir_for_db, 'configs.json')
     params = simpleutils.read_config(configs)
     
@@ -152,6 +153,7 @@ if __name__ == "__main__":
     
     fout = open(result_file, 'w', encoding='utf8', newline='\n')
     fout2 = open(result_file2, 'w', encoding='utf8', newline='\n')
+    fout_score = open(result_file_score, 'wb')
     detail_writer = csv.writer(fout2)
     detail_writer.writerow(['query', 'answer', 'score', 'time', 'part_scores'])
     for dat in tqdm.tqdm(loader):
@@ -184,26 +186,32 @@ if __name__ == "__main__":
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
+        song_score = np.zeros(len(songList), dtype=np.float32)
         if top_k == -1:
             # optimize for exhaustive search
             arr = faiss.vector_to_array(index.xb).reshape([index.ntotal, d])
             dists = embeddings.numpy() @ arr.T
-            scoreboard = np.zeros(index.ntotal + len(songList) * embeddings.shape[0])
-            shift = index2song * embeddings.shape[0] + np.arange(index.ntotal)
-            for t in range(embeddings.shape[0]):
-                scoreboard[shift + (embeddings.shape[0] - t)] += dists[t]
+            query_len = embeddings.shape[0]
+            scoreboard = np.zeros(index.ntotal + len(songList) * query_len)
+            shift = index2song * query_len + np.arange(index.ntotal)
+            for t in range(query_len):
+                scoreboard[shift + (query_len - t)] += dists[t]
             t1_s = np.argmax(scoreboard)
             sco = scoreboard[t1_s]
             t1 = np.searchsorted(shift, t1_s, side='right') - 1
             ans = index2song[t1]
             t0 = int(landmarkKey[ans-1]) if ans > 0 else 0
             t0_s = shift[t0]
-            tim = t1_s - t0_s - embeddings.shape[0]
+            tim = t1_s - t0_s - query_len
             upsco = []
-            for t in range(embeddings.shape[0]):
+            for t in range(query_len):
                 t2 = t0 + tim + t
                 if t0 <= t2 < int(landmarkKey[ans]):
                     upsco.append(float(dists[t, t2]))
+            for songId in range(len(songList)):
+                lo = 0 if songId == 0 else landmarkKey[songId-1] + songId * query_len
+                hi = landmarkKey[songId] + (songId+1) * query_len
+                song_score[songId] = np.max(scoreboard[lo:hi])
         else:
             dists, ids = index.search(x=embeddings.numpy(), k=top_k)
             scoreboard = {}
@@ -227,6 +235,9 @@ if __name__ == "__main__":
                         scoreboard[key] = float(dists[t, j])
                         upcount[key] = [float(dists[t, j])]
             scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
+            for sco, ans_tim in scoreboard:
+                ans = ans_tim[0]
+                song_score[ans] = max(song_score[ans], sco)
             sco, (ans, tim) = max(scoreboard)
             upsco = upcount[ans, tim]
         ans = songList[ans]
@@ -249,6 +260,8 @@ if __name__ == "__main__":
         fout.flush()
         detail_writer.writerow([name[0], ans, sco, tim, upsco])
         fout2.flush()
+        
+        fout_score.write(song_score.tobytes())
     fout.close()
     fout2.close()
 else:
