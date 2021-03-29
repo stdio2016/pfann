@@ -88,6 +88,9 @@ class MusicDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
+    if len(sys.argv) < 4:
+        print('Usage: python %s <query list> <database dir> <result file>' % sys.argv[0])
+        sys.exit()
     file_list_for_query = sys.argv[1]
     dir_for_db = sys.argv[2]
     result_file = sys.argv[3]
