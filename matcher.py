@@ -105,7 +105,6 @@ if __name__ == "__main__":
     d = params['model']['d']
     h = params['model']['h']
     u = params['model']['u']
-    fuller = params['model']['fuller'] if 'fuller' in params['model'] else False
     F_bin = params['n_mels']
     segn = int(params['segment_size'] * params['sample_rate'])
     T = (segn + params['stft_hop'] - 1) // params['stft_hop']
@@ -114,7 +113,7 @@ if __name__ == "__main__":
 
     print('loading model...')
     device = torch.device('cuda')
-    model = FpNetwork(d, h, u, F_bin, T, fuller=fuller).to(device)
+    model = FpNetwork(d, h, u, F_bin, T, params['model']).to(device)
     model.load_state_dict(torch.load(os.path.join(dir_for_db, 'model.pt')))
     print('model loaded')
     

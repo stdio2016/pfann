@@ -41,7 +41,8 @@
     "d": 128,
     "h": 1024,
     "u": 32,
-    "fuller": true
+    "fuller": true,
+    "conv_activation": "ELU"
   },
   "indexer": {
     "index_factory": "IVF200,PQ64x8np",
