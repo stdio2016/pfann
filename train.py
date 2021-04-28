@@ -125,12 +125,28 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
                 A = torch.matmul(y_embed_aug, embeds.T.to(device))
                 ranks += (A.T >= self_score).sum(dim=0)
             acc = int((ranks == 1).sum())
-            print('validate score: %f mrr: %f' % (acc / validate_N, (1/ranks).mean()))
+            acc10 = int((ranks <= 10).sum())
+            acc20 = int((ranks <= 20).sum())
+            acc100 = int((ranks <= 100).sum())
+            print('validate score: %f' % (acc / validate_N,))
             writer.add_scalar('validation/accuracy', acc / validate_N, epoch)
-            writer.add_scalar('validation/MRR', (1/ranks).mean(), epoch)
+            writer.add_scalar('validation/top10', acc10 / validate_N, epoch)
+            writer.add_scalar('validation/top20', acc20 / validate_N, epoch)
+            writer.add_scalar('validation/top100', acc100 / validate_N, epoch)
+            #writer.add_scalar('validation/MRR', (1/ranks).mean(), epoch)
         scheduler.step()
         del A, ranks, self_score, y_embed_aug, y_embed_org, y_embed
         writer.flush()
+        
+        # save checkpoint
+        check = {
+            'epoch': epoch,
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+        }
+        torch.save(check, os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch))
+        with open(os.path.join(params['model_dir'], 'epochs.txt'), 'w') as fout:
+            fout.write('%d\n' % epoch)
     os.makedirs(params['model_dir'], exist_ok=True)
     torch.save(model.state_dict(), os.path.join(params['model_dir'], 'model.pt'))
 
