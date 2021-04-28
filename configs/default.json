@@ -5,7 +5,7 @@
   "model_dir": "n640d128",
   "cache_dir": "caches",
   "batch_size": 640,
-  "shuffle_size": 20000,
+  "shuffle_size": 600000,
   "clips_per_song": 60,
   "fftconv_n": 32768,
   "sample_rate": 8000,
@@ -18,22 +18,22 @@
   "segment_size": 1,
   "hop_size": 0.5,
   "time_offset": 1.2,
-  "pad_start": 1,
+  "pad_start": 0,
   "noise": {
     "train": "configs/noise_train.csv",
     "validate": "configs/noise_val.csv",
     "snr_max": 10,
-    "snr_min": 0
+    "snr_min": 10
   },
   "micirp": {
     "train": "configs/micirp_train.csv",
     "validate": "configs/micirp_val.csv",
-    "length": 0.5
+    "length": 0.05
   },
   "air": {
     "train": "configs/air_train.csv",
     "validate": "configs/air_val.csv",
-    "length": 1
+    "length": 0.05
   },
   "cutout_min": 0.1,
   "cutout_max": 0.5,
