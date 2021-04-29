@@ -16,6 +16,7 @@ import datautil.dataset
 from datautil.dataset import build_data_loader
 from datautil.mock_data import make_false_data
 import simpleutils
+from datautil.specaug import SpecAugment
 
 def similarity_loss(y, tau):
     a = torch.matmul(y, y.T)
@@ -37,6 +38,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
             T_0=100, eta_min=1e-7)
     os.makedirs(params['model_dir'], exist_ok=True)
+    specaug = SpecAugment()
     for epoch in range(100):
         model.train()
         tau = 0.05
@@ -55,6 +57,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             optimizer.zero_grad()
         
             x = torch.flatten(x, 0, 1)
+            x = specaug.augment(x)
             if minibatch < batch_size:
                 with torch.no_grad():
                     xs = torch.split(x, minibatch)

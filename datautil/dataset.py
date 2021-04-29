@@ -235,35 +235,6 @@ class MyDataset(torch.utils.data.Dataset):
                     warnings.simplefilter("ignore")
                     wav1 = torch.log(mel(wav1) + 1e-8)
                     wav2 = torch.log(mel(wav2) + 1e-8)
-                
-                # SpecAugment
-                if self.spec_augment:
-                    cutout_min = self.params['cutout_min']
-                    cutout_max = self.params['cutout_max']
-                    
-                    # cutout
-                    f = wav1.shape[1] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
-                    f = int(f)
-                    f0 = torch.randint(0, wav1.shape[1] - f, (1,))
-                    t = wav1.shape[2] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
-                    t = int(t)
-                    t0 = torch.randint(0, wav1.shape[2] - t, (1,))
-                    wav1[:, f0:f0+f, t0:t0+t] = 0
-                    wav2[:, f0:f0+f, t0:t0+t] = 0
-                    
-                    # frequency masking
-                    f = wav1.shape[1] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
-                    f = int(f)
-                    f0 = torch.randint(0, wav1.shape[1] - f, (1,))
-                    wav1[:, f0:f0+f, :] = 0
-                    wav2[:, f0:f0+f, :] = 0
-                    
-                    # time masking
-                    t = wav1.shape[2] * (cutout_min + torch.rand(1) * (cutout_max-cutout_min))
-                    t = int(t)
-                    t0 = torch.randint(0, wav1.shape[2] - t, (1,))
-                    wav1[:, :, t0:t0+t] = 0
-                    wav2[:, :, t0:t0+t] = 0
             return torch.stack([wav1, wav2], dim=1)
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index

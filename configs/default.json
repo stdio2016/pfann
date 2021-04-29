@@ -36,7 +36,11 @@
     "length": 0.05
   },
   "cutout_min": 0.1,
-  "cutout_max": 0.5,
+  "cutout_max": 0.4,
+  "spec_augment": {
+    "freq_size": [5, 20],
+    "time_size": [5, 16]
+  },
   "model": {
     "d": 128,
     "h": 1024,
