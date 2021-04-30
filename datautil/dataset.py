@@ -175,12 +175,16 @@ class MyDataset(torch.utils.data.Dataset):
 
                 # normalize volume
                 wav1 -= wav1.mean(dim=1).unsqueeze(1)
-                wav1 = F.normalize(wav1, p=2, dim=1)
-
+                #wav1 = F.normalize(wav1, p=2, dim=1)
+                
                 with warnings.catch_warnings():
                     # torchaudio is still using deprecated function torch.rfft
                     warnings.simplefilter("ignore")
-                    return torch.unsqueeze(torch.log(mel(wav1) + 1e-8), 1)
+                    wav1 = torch.log(mel(wav1) + 1e-12)
+                    
+                    # maximum is zero
+                    wav1 -= torch.amax(wav1, dim=(1,2)).reshape([-1, 1, 1])
+                    return torch.unsqueeze(wav1, 1)
             
             wav2 = torch.zeros([bat, self.sel_size + self.pad_start], dtype=torch.float32)
             for i,x in enumerate(index):
@@ -194,9 +198,9 @@ class MyDataset(torch.utils.data.Dataset):
             # our model cannot hear <300Hz sound
             if self.params['noise'].get('snr_only_in_f_range', False):
                 wav2_hi = torchaudio.functional.bass_biquad(wav2, self.sample_rate, -24, self.params['f_min'])
-                amp = torch.sqrt((wav2_hi**2).mean(dim=1))
+                amp = torch.sqrt((wav2_hi**2).mean(dim=1) + 1e-12)
             else:
-                amp = torch.sqrt((wav2**2).mean(dim=1))
+                amp = torch.sqrt((wav2**2).mean(dim=1) + 1e-12)
             snr_max = self.params['noise']['snr_max']
             snr_min = self.params['noise']['snr_min']
             snr = snr_min + torch.rand(bat) * (snr_max - snr_min)
@@ -206,9 +210,9 @@ class MyDataset(torch.utils.data.Dataset):
                 # our model cannot hear <300Hz sound
                 if self.params['noise'].get('snr_only_in_f_range', False):
                     noise_hi = torchaudio.functional.bass_biquad(noise, self.sample_rate, -24, self.params['f_min'])
-                    noise_amp = torch.sqrt((noise_hi**2).mean(dim=1))
+                    noise_amp = torch.sqrt((noise_hi**2).mean(dim=1) + 1e-12)
                 else:
-                    noise_amp = torch.sqrt((noise**2).mean(dim=1))
+                    noise_amp = torch.sqrt((noise**2).mean(dim=1) + 1e-12)
 
                 wav2 += noise * (amp / noise_amp * torch.pow(10, -0.05*snr)).unsqueeze(1)
             else:
@@ -225,16 +229,21 @@ class MyDataset(torch.utils.data.Dataset):
             
             # normalize volume
             wav1 -= wav1.mean(dim=1).unsqueeze(1)
-            wav1 = F.normalize(wav1, p=2, dim=1)
-            wav2 = F.normalize(wav2, p=2, dim=1)
+            if self.output_wav:
+                wav1 = F.normalize(wav1, p=2, dim=1)
+                wav2 = F.normalize(wav2, p=2, dim=1)
             
             # Mel spectrogram
             if not self.output_wav:
                 with warnings.catch_warnings():
                     # torchaudio is still using deprecated function torch.rfft
                     warnings.simplefilter("ignore")
-                    wav1 = torch.log(mel(wav1) + 1e-8)
-                    wav2 = torch.log(mel(wav2) + 1e-8)
+                    wav1 = torch.log(mel(wav1) + 1e-12)
+                    wav2 = torch.log(mel(wav2) + 1e-12)
+                    
+                # maximum is zero
+                wav1 -= torch.amax(wav1, dim=(1,2)).reshape([-1, 1, 1])
+                wav2 -= torch.amax(wav2, dim=(1,2)).reshape([-1, 1, 1])
             return torch.stack([wav1, wav2], dim=1)
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index
