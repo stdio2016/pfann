@@ -24,13 +24,13 @@ class SpecAugment:
         mask[f0:f0+f, t0:t0+t] = 1
         
         # frequency masking
-        f = F * (self.freq_min + torch.rand(1) * (self.freq_max - self.freq_min))
+        f = self.freq_min + torch.rand(1) * (self.freq_max - self.freq_min)
         f = int(f)
         f0 = torch.randint(0, F - f + 1, (1,))
         mask[f0:f0+f, :] = 1
         
         # time masking
-        t = T * (self.time_min + torch.rand(1) * (self.time_max - self.time_min))
+        t = self.time_min + torch.rand(1) * (self.time_max - self.time_min)
         t = int(t)
         t0 = torch.randint(0, T - t + 1, (1,))
         mask[:, t0:t0+t] = 1
