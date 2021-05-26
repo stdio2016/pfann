@@ -175,7 +175,7 @@ class MyDataset(torch.utils.data.Dataset):
 
                 # normalize volume
                 wav1 -= wav1.mean(dim=1).unsqueeze(1)
-                #wav1 = F.normalize(wav1, p=2, dim=1)
+                wav1 = F.normalize(wav1, p=2, dim=1)
                 
                 with warnings.catch_warnings():
                     # torchaudio is still using deprecated function torch.rfft
@@ -183,7 +183,8 @@ class MyDataset(torch.utils.data.Dataset):
                     wav1 = torch.log(mel(wav1) + 1e-12)
                     
                     # maximum is zero
-                    wav1 -= torch.amax(wav1, dim=(1,2)).reshape([-1, 1, 1])
+                    if self.params.get('spec_norm', 'l2') == 'max':
+                        wav1 -= torch.amax(wav1, dim=(1,2)).reshape([-1, 1, 1])
                     return torch.unsqueeze(wav1, 1)
             
             wav2 = torch.zeros([bat, self.sel_size + self.pad_start], dtype=torch.float32)
@@ -229,9 +230,8 @@ class MyDataset(torch.utils.data.Dataset):
             
             # normalize volume
             wav1 -= wav1.mean(dim=1).unsqueeze(1)
-            if self.output_wav:
-                wav1 = F.normalize(wav1, p=2, dim=1)
-                wav2 = F.normalize(wav2, p=2, dim=1)
+            wav1 = F.normalize(wav1, p=2, dim=1)
+            wav2 = F.normalize(wav2, p=2, dim=1)
             
             # Mel spectrogram
             if not self.output_wav:
@@ -242,8 +242,9 @@ class MyDataset(torch.utils.data.Dataset):
                     wav2 = torch.log(mel(wav2) + 1e-12)
                     
                 # maximum is zero
-                wav1 -= torch.amax(wav1, dim=(1,2)).reshape([-1, 1, 1])
-                wav2 -= torch.amax(wav2, dim=(1,2)).reshape([-1, 1, 1])
+                if self.params.get('spec_norm', 'l2') == 'max':
+                    wav1 -= torch.amax(wav1, dim=(1,2)).reshape([-1, 1, 1])
+                    wav2 -= torch.amax(wav2, dim=(1,2)).reshape([-1, 1, 1])
             return torch.stack([wav1, wav2], dim=1)
         #print('I am %d and I have %d' % (os.getpid(), index))
         wave, pad_start, start, du = index

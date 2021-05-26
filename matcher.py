@@ -173,7 +173,9 @@ if __name__ == "__main__":
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
                 g = mel(g)
-            g = torch.log(g + 1e-8)
+            g = torch.log(g + 1e-12)
+            if params.get('spec_norm', 'l2') == 'max':
+                g -= torch.amax(g, dim=(1,2)).reshape(-1, 1, 1)
             if visualize:
                 g.requires_grad = True
             z = model.forward(g, norm=False).cpu()
