@@ -38,7 +38,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
             T_0=100, eta_min=1e-7)
     os.makedirs(params['model_dir'], exist_ok=True)
-    specaug = SpecAugment()
+    specaug = SpecAugment(params)
     for epoch in range(100):
         model.train()
         tau = 0.05

@@ -1,14 +1,14 @@
 import torch
 
 class SpecAugment:
-    def __init__(self):
-        self.freq_min = 5
-        self.freq_max = 20
-        self.time_min = 5
-        self.time_max = 16
+    def __init__(self, params):
+        self.freq_min = params.get('cutout_min', 0.1) # 5
+        self.freq_max = params.get('cutout_max', 0.5) # 20
+        self.time_min = params.get('cutout_min', 0.1) # 5
+        self.time_max = params.get('cutout_max', 0.5) # 16
         
-        self.cutout_min = 0.1
-        self.cutout_max = 0.4
+        self.cutout_min = params.get('cutout_min', 0.1) # 0.1
+        self.cutout_max = params.get('cutout_max', 0.5) # 0.4
     
     def get_mask(self, F, T):
         mask = torch.zeros(F, T)
@@ -24,13 +24,13 @@ class SpecAugment:
         mask[f0:f0+f, t0:t0+t] = 1
         
         # frequency masking
-        f = self.freq_min + torch.rand(1) * (self.freq_max - self.freq_min)
+        f = F * (self.freq_min + torch.rand(1) * (self.freq_max - self.freq_min))
         f = int(f)
         f0 = torch.randint(0, F - f + 1, (1,))
         mask[f0:f0+f, :] = 1
         
         # time masking
-        t = self.time_min + torch.rand(1) * (self.time_max - self.time_min)
+        t = T * (self.time_min + torch.rand(1) * (self.time_max - self.time_min))
         t = int(t)
         t0 = torch.randint(0, T - t + 1, (1,))
         mask[:, t0:t0+t] = 1
