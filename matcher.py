@@ -30,6 +30,7 @@ class MusicDataset(torch.utils.data.Dataset):
         self.sample_rate = self.params['sample_rate']
         self.segment_size = int(self.sample_rate * self.params['segment_size'])
         self.hop_size = int(self.sample_rate * self.params['hop_size'])
+        self.frame_shift_mul = self.params['indexer'].get('frame_shift_mul', 1)
         with open(file_list, 'r', encoding='utf8') as fin:
             self.files = []
             for x in fin:
@@ -77,7 +78,7 @@ class MusicDataset(torch.utils.data.Dataset):
             wav = F.pad(wav, (0, self.segment_size - wav.shape[0]))
         
         # normalize volume
-        wav = wav.unfold(0, self.segment_size, self.hop_size)
+        wav = wav.unfold(0, self.segment_size, self.hop_size//self.frame_shift_mul)
         wav = wav - wav.mean(dim=1).unsqueeze(1)
         wav = F.normalize(wav, p=2, dim=1)
         
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     T = (segn + params['stft_hop'] - 1) // params['stft_hop']
     
     top_k = params['indexer']['top_k']
+    frame_shift_mul = params['indexer'].get('frame_shift_mul', 1)
 
     print('loading model...')
     device = torch.device('cuda')
@@ -230,7 +232,8 @@ if __name__ == "__main__":
                     #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
                     songId = int(index2song[t1])
                     t0 = int(landmarkKey[songId-1]) if songId > 0 else 0
-                    dt = t1 - t0 - t
+                    #dt = t1 - t0 - round(t/frame_shift_mul)
+                    dt = (t1 - t0) * frame_shift_mul - t
                     key = (songId, dt)
                     if key in scoreboard:
                         scoreboard[key] += float(dists[t, j])
@@ -245,6 +248,7 @@ if __name__ == "__main__":
             sco, (ans, tim) = max(scoreboard)
             upsco = upcount[ans, tim]
         ans = songList[ans]
+        tim /= frame_shift_mul
         tim *= params['hop_size']
         if visualize:
             grads = torch.abs(grads)
