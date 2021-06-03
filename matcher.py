@@ -237,10 +237,10 @@ if __name__ == "__main__":
                     key = (songId, dt)
                     if key in scoreboard:
                         scoreboard[key] += float(dists[t, j])
-                        upcount[key].append(float(dists[t, j]))
+                        upcount[key] += [float(dists[t, j]), t, j]
                     else:
                         scoreboard[key] = float(dists[t, j])
-                        upcount[key] = [float(dists[t, j])]
+                        upcount[key] = [float(dists[t, j]), t, j]
             scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
             for sco, ans_tim in scoreboard:
                 ans = ans_tim[0]
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             torchvision.utils.save_image(grads, '%s.png' % os.path.basename(name[0]))
         fout.write('%s\t%s\n' % (name[0], ans))
         fout.flush()
-        detail_writer.writerow([name[0], ans, sco, tim, upsco])
+        detail_writer.writerow([name[0], ans, sco, tim] + upsco)
         fout2.flush()
         
         fout_score.write(song_score.tobytes())
