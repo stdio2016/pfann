@@ -145,6 +145,10 @@ if __name__ == "__main__":
         for t in range(embeddings.shape[0]):
             t0 = T - t//frame_shift_mul
             accum_scos[t % frame_shift_mul, t0:t0+slen] += scos[t]
+        # these are invalid time shifts
+        accum_scos[:, 0] = -T*2
+        accum_scos[(embeddings.shape[0]-1)%frame_shift_mul+1:, 1] = -T*2
+        
         tim = torch.argmax(accum_scos).item()
         tim1, tim2 = divmod(tim, slen + T)
         tim = -tim1 + (tim2-T) * frame_shift_mul
