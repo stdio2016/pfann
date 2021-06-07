@@ -67,7 +67,7 @@ if __name__ == "__main__":
     index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
     assert len(songList) == landmarkKey.shape[0]
     index2song = np.repeat(np.arange(len(songList)), landmarkKey)
-    landmarkKey = np.cumsum(landmarkKey, dtype=np.int64)
+    landmarkKey = np.pad(np.cumsum(landmarkKey, dtype=np.int64), (1, 0))
     print('database loaded')
     if isinstance(index, faiss.IndexIVF):
         print('inverse list count:', index.nlist)
@@ -143,17 +143,17 @@ if __name__ == "__main__":
             sco = scoreboard[t1_s]
             t1 = np.searchsorted(shift, t1_s, side='right') - 1
             ans = index2song[t1]
-            t0 = int(landmarkKey[ans-1]) if ans > 0 else 0
+            t0 = landmarkKey[ans]
             t0_s = shift[t0]
             tim = t1_s - t0_s - query_len
             upsco = []
             for t in range(query_len):
                 t2 = t0 + tim + t
-                if t0 <= t2 < int(landmarkKey[ans]):
+                if t0 <= t2 < int(landmarkKey[ans+1]):
                     upsco.append(float(dists[t, t2]))
             for songId in range(len(songList)):
-                lo = 0 if songId == 0 else landmarkKey[songId-1] + songId * query_len
-                hi = landmarkKey[songId] + (songId+1) * query_len
+                lo = landmarkKey[songId] + songId * query_len
+                hi = landmarkKey[songId+1] + (songId+1) * query_len
                 song_score[songId] = np.max(scoreboard[lo:hi])
         else:
             dists, ids = index.search(x=embeddings.numpy(), k=top_k)
@@ -168,7 +168,7 @@ if __name__ == "__main__":
                     t1 = int(ids[t, j])
                     #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
                     songId = int(index2song[t1])
-                    t0 = int(landmarkKey[songId-1]) if songId > 0 else 0
+                    t0 = int(landmarkKey[songId])
                     #dt = t1 - t0 - round(t/frame_shift_mul)
                     dt = (t1 - t0) * frame_shift_mul - t
                     key = (songId, dt)
@@ -178,6 +178,31 @@ if __name__ == "__main__":
                     else:
                         scoreboard[key] = float(dists[t, j])
                         upcount[key] = [float(dists[t, j]), t, j]
+            
+            if True:
+                # sum of whole sequence
+                N = frame_shift_mul
+                nFrames = embeddings.shape[0]
+                queryLen = (nFrames - 1) // N + 1
+                xn = np.pad(embeddings.numpy(), [(0, queryLen * N - nFrames), (0,0)])
+                xn = xn.reshape([queryLen, N, d]).transpose([1, 0, 2])
+                for songId, dt in scoreboard.keys():
+                    songStart = int(landmarkKey[songId])
+                    songLen = int(landmarkKey[songId+1]) - songStart
+                    if dt > 0:
+                        t_frame = (dt-1)//N + 1
+                    else:
+                        t_frame = dt//N
+                    t_start = max(t_frame, 0)
+                    t_end = min(t_frame + queryLen, songLen)
+                    # get song vector
+                    vectors = index.reconstruct_n(songStart + t_start, t_end - t_start)
+                    q_start = t_start - t_frame
+                    q_end = t_end - t_frame
+                    # compute sum of segment score
+                    sco = np.dot(xn[:, q_start:q_end].reshape([N, -1]), vectors.flatten())
+                    scoreboard[songId, dt] = np.max(sco).item()
+            
             scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
             for sco, ans_tim in scoreboard:
                 ans = ans_tim[0]
