@@ -65,6 +65,7 @@ if __name__ == "__main__":
     
     landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int32)
     index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
+    index.make_direct_map()
     assert len(songList) == landmarkKey.shape[0]
     index2song = np.repeat(np.arange(len(songList)), landmarkKey)
     landmarkKey = np.pad(np.cumsum(landmarkKey, dtype=np.int64), (1, 0))
@@ -196,7 +197,8 @@ if __name__ == "__main__":
                     t_start = max(t_frame, 0)
                     t_end = min(t_frame + queryLen, songLen)
                     # get song vector
-                    vectors = index.reconstruct_n(songStart + t_start, t_end - t_start)
+                    vectors = np.stack([index.reconstruct(i) for i in range(songStart + t_start, songStart + t_end)])
+                    #vectors = index.reconstruct_n(songStart + t_start, t_end - t_start)
                     q_start = t_start - t_frame
                     q_end = t_end - t_frame
                     # compute sum of segment score
