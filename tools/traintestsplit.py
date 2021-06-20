@@ -11,6 +11,7 @@ argp.add_argument('--test', default='test.csv')
 argp.add_argument('-p', '--portion', action='store_true')
 args = argp.parse_args()
 
+random.seed(1)
 with open(args.csv, 'r', encoding='utf8') as fin:
     reader = csv.reader(fin)
     data = []
