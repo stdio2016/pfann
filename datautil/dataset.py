@@ -121,8 +121,15 @@ class MyDataset(torch.utils.data.Dataset):
             with open(cachepath, 'rb') as fout:
                 duration = np.frombuffer(fout.read(4), dtype=np.int32)[0]
                 self.durations[i] = duration
-                fout.seek(4 + duration * 2)
-                usable = np.frombuffer(fout.read(), dtype=np.int32)
+                # frame info no longer come from file
+                #fout.seek(4 + duration * 2)
+                #usable = np.frombuffer(fout.read(), dtype=np.int32)
+                usable = []
+                t = 0
+                while t + self.clip_size < duration:
+                    usable.append(t)
+                    t += self.hop_size
+                usable = np.array(usable, dtype=np.int32)
             return i, usable
         wave, smpRate = get_audio(self.data_dir/name)
         wave = torch.FloatTensor(wave)
@@ -138,10 +145,12 @@ class MyDataset(torch.utils.data.Dataset):
         usable = []
         while t + self.clip_size < duration:
             part = wave[:, t:t+self.clip_size]
-            if float(torch.max(torch.abs(part))) > vol * 1e-4:
-                usable.append(t)
-            else:
-                print('%s frame %f dropped' % (name, t/self.sample_rate))
+            # sorry I shouldn't drop any frames
+            usable.append(t)
+            #if float(torch.max(torch.abs(part))) > vol * 1e-4:
+            #    usable.append(t)
+            #else:
+            #    print('%s frame %f dropped' % (name, t/self.sample_rate))
             t += self.hop_size
         usable = np.array(usable, dtype=np.int32)
         # float32 to int16
