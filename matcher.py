@@ -190,10 +190,7 @@ if __name__ == "__main__":
                 for songId, dt in scoreboard.keys():
                     songStart = int(landmarkKey[songId])
                     songLen = int(landmarkKey[songId+1]) - songStart
-                    if dt > 0:
-                        t_frame = (dt-1)//N + 1
-                    else:
-                        t_frame = dt//N
+                    t_frame = (dt-1)//N + 1
                     t_start = max(t_frame, 0)
                     t_end = min(t_frame + queryLen, songLen)
                     # get song vector
