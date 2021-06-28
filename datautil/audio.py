@@ -5,6 +5,8 @@ from pathlib import Path
 
 import miniaudio
 import numpy as np
+import wave
+import io
 
 def miniaudio_get_audio(filename):
     code = Path(filename).read_bytes()
@@ -17,16 +19,43 @@ def ffmpeg_get_audio(filename):
     proc = subprocess.Popen(['ffmpeg', '-i', filename, '-f', 'wav', 'pipe:1'],
         stderr=error_log,
         stdin=open(os.devnull),
-        stdout=subprocess.PIPE)
-    code = proc.stdout.read()
-    if code:
-        audio = miniaudio.decode(code, output_format=miniaudio.SampleFormat.FLOAT32)
-        samples = np.array(audio.samples).reshape([-1, audio.nchannels]).T
-        return samples, audio.sample_rate
-    print('failed to decode %s. maybe the file is broken!' % filename)
+        stdout=subprocess.PIPE,
+        bufsize=1000000)
+    try:
+        wav = wave.open(io.BytesIO(proc.stdout.read()))
+        n = wav.getnframes()
+        samples = np.frombuffer(wav.readframes(n), dtype=np.int16) / 32768
+        samples = samples.reshape([-1, wav.getnchannels()]).T
+        return samples, wav.getframerate()
+    except (wave.Error, EOFError):
+        print('failed to decode %s. maybe the file is broken!' % filename)
     return np.array([0])
 
+def wave_get_audio(filename):
+    with wave.open(filename, 'rb') as wav:
+        smpwidth = wav.getsampwidth()
+        if smpwidth not in {1, 2, 3}:
+            return None
+        n = wav.getnframes()
+        if smpwidth == 1:
+            samples = np.frombuffer(wav.readframes(n), dtype=np.uint8) / 128 - 1
+        elif smpwidth == 2:
+            samples = np.frombuffer(wav.readframes(n), dtype=np.int16) / 32768
+        elif smpwidth == 3:
+            a = np.frombuffer(wav.readframes(n), dtype=np.uint8)
+            samples = np.stack([a[0::3], a[1::3], a[2::3], -(a[2::3]>>7)], axis=1).view(np.int32).squeeze(1)
+            del a
+            samples = samples / 8388608
+        samples = samples.reshape([-1, wav.getnchannels()]).T
+        return samples, wav.getframerate()
+
 def get_audio(filename):
+    if filename.endswith('.wav'):
+        try:
+            a = wave_get_audio(filename)
+            if a: return a
+        except Exception:
+            pass
     try:
         return miniaudio_get_audio(filename)
     except Exception:
