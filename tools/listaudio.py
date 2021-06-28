@@ -5,21 +5,9 @@ from multiprocessing import Pool
 import os
 import random
 import subprocess
+import wave
 
-import miniaudio
 import tqdm
-
-class MyStream(miniaudio.StreamableSource):
-    def __init__(self, name):
-        self.f = open(name, 'rb')
-    def close(self):
-        self.f.close()
-    def read(self, num):
-        return self.f.read(num)
-    def seek(self, offset, origin):
-        origin = 0 if origin == miniaudio.SeekOrigin.START else 1
-        out = self.f.seek(offset, origin)
-        return out != -1
 
 argp = argparse.ArgumentParser()
 argp.add_argument('--folder', required=True)
@@ -28,37 +16,46 @@ argp.add_argument('--threads', type=int)
 argp.add_argument('--out', default='out.csv')
 args = argp.parse_args()
 
+class HackExtensibleWave:
+    def __init__(self, stream):
+        self.stream = stream
+        self.pos = 0
+    def read(self, n):
+        r = self.stream.read(n)
+        new_pos = self.pos + len(r)
+        if self.pos < 20 and self.pos + n >= 20:
+            r = r[:20-self.pos] + b'\x01\x00'[:new_pos-20] + r[22-self.pos:]
+        elif 20 <= self.pos < 22:
+            r = b'\x01\x00'[self.pos-20:new_pos-20] + r[22-self.pos:]
+        self.pos = new_pos
+        return r
+
 def ffmpeg_get_audio_length(filename):
-    tmpname = 'tmp%d.wav' % os.getpid()
-    if os.path.exists(tmpname):
-        os.unlink(tmpname)
-    subprocess.run(['ffmpeg', '-i', filename, '-y', tmpname],
+    proc = subprocess.Popen(['ffmpeg', '-i', filename, '-f', 'wav', 'pipe:1'],
         stderr=open(os.devnull),
-        stdout=open(os.devnull),
-        stdin=open(os.devnull))
-    if os.path.exists(tmpname):
-        info = miniaudio.get_file_info(tmpname)
-        os.unlink(tmpname)
-        return info.duration
-    print('failed to decode %s. maybe the file is broken!' % filename)
+        stdin=open(os.devnull),
+        stdout=subprocess.PIPE,
+        bufsize=1000000)
+    try:
+        wav = wave.open(HackExtensibleWave(proc.stdout))
+        smprate = wav.getframerate()
+        has = 1
+        n = 0
+        while has:
+            has = len(wav.readframes(1000000))
+            n += has
+        n //= wav.getsampwidth() * wav.getnchannels()
+        #smprate, wav = scipy.io.wavfile.read(proc.stdout)
+        return n / smprate, smprate, wav.getnchannels()
+        return wav.shape[0] / smprate, smprate, wav.shape[1]
+    except (wave.Error, EOFError) as x:
+        print(x)
+        print('failed to decode %s. maybe the file is broken!' % filename)
     return None
 
 def get_audio_length(filename):
     ext = os.path.splitext(filename)[1]
-    if ext not in {'.wav', '.mp3', '.flac', '.ogg'}:
-        #print('miniaudio cannot decode %s files. Try FFmpeg' % ext)
-        return ffmpeg_get_audio_length(filename)
-    try:
-        # streaming to reduce memory usage
-        my = MyStream(filename)
-        stream = miniaudio.stream_any(my, sample_rate=8000, nchannels=1)
-        du = 0
-        for s in stream:
-            du += len(s)
-        return du / 8000
-    except miniaudio.DecodeError as x:
-        #print('miniaudio cannot decode %s. Try FFmpeg' % filename)
-        return ffmpeg_get_audio_length(filename)
+    return ffmpeg_get_audio_length(filename)
 
 formats = {'.wav', '.mp3', '.m4a', '.aac', '.ogg', '.flac', '.webm'}
 def find_all_audio(folder, relative, all_files):
@@ -88,7 +85,7 @@ if __name__ == '__main__':
         with tqdm.tqdm(total=len(all_files)) as pbar:
             for i, (filename, du) in enumerate(p.imap_unordered(worker, all_files)):
                 if du is not None:
-                    sound_files.append([filename, du])
+                    sound_files.append([filename, *du])
                 pbar.update()
     sound_files.sort()
     if args.sample:
@@ -97,9 +94,9 @@ if __name__ == '__main__':
         if args.out.endswith('.csv'):
             # csv format with duration info
             writer = csv.writer(fout, lineterminator="\r\n")
-            writer.writerow(['file', 'duration'])
+            writer.writerow(['file', 'duration', 'sample_rate', 'channels'])
             writer.writerows(sound_files)
         else:
             # plain text list
-            for sound_name, duration in sound_files:
+            for sound_name, duration, smprate, nchannels in sound_files:
                 fout.write(sound_name + '\n')
