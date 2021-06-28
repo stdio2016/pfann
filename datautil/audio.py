@@ -3,16 +3,24 @@ import os
 import subprocess
 from pathlib import Path
 
-import miniaudio
 import numpy as np
 import wave
 import io
 
-def miniaudio_get_audio(filename):
-    code = Path(filename).read_bytes()
-    audio = miniaudio.decode(code, output_format=miniaudio.SampleFormat.FLOAT32)
-    samples = np.array(audio.samples).reshape([-1, audio.nchannels]).T
-    return samples, audio.sample_rate
+# because builtin wave won't read wav files with more than 2 channels
+class HackExtensibleWave:
+    def __init__(self, stream):
+        self.stream = stream
+        self.pos = 0
+    def read(self, n):
+        r = self.stream.read(n)
+        new_pos = self.pos + len(r)
+        if self.pos < 20 and self.pos + n >= 20:
+            r = r[:20-self.pos] + b'\x01\x00'[:new_pos-20] + r[22-self.pos:]
+        elif 20 <= self.pos < 22:
+            r = b'\x01\x00'[self.pos-20:new_pos-20] + r[22-self.pos:]
+        self.pos = new_pos
+        return r
 
 def ffmpeg_get_audio(filename):
     error_log = open(os.devnull, 'w')
@@ -22,7 +30,7 @@ def ffmpeg_get_audio(filename):
         stdout=subprocess.PIPE,
         bufsize=1000000)
     try:
-        wav = wave.open(io.BytesIO(proc.stdout.read()))
+        wav = wave.open(HackExtensibleWave(proc.stdout))
         n = wav.getnframes()
         samples = np.frombuffer(wav.readframes(n), dtype=np.int16) / 32768
         samples = samples.reshape([-1, wav.getnchannels()]).T
@@ -32,7 +40,8 @@ def ffmpeg_get_audio(filename):
     return np.array([0])
 
 def wave_get_audio(filename):
-    with wave.open(filename, 'rb') as wav:
+    with open(filename, 'rb') as fin:
+        wav = wave.open(HackExtensibleWave(fin))
         smpwidth = wav.getsampwidth()
         if smpwidth not in {1, 2, 3}:
             return None
@@ -56,35 +65,7 @@ def get_audio(filename):
             if a: return a
         except Exception:
             pass
-    try:
-        return miniaudio_get_audio(filename)
-    except Exception:
-        pass
     return ffmpeg_get_audio(filename)
-
-class MiniaudioStream:
-    def __init__(self, fin, stream, sample_rate, nchannels):
-        self.fin = fin
-        self.stream = stream
-        self.sample_rate = sample_rate
-        self.nchannels = nchannels
-
-if os.name == 'nt':
-    import win32api
-    def _get_filename_bytes(filename: str) -> bytes:
-        filename2 = os.path.expanduser(filename)
-        if not os.path.isfile(filename2):
-            raise FileNotFoundError(filename)
-        # short file name usually works, but I don't know...
-        return win32api.GetShortPathName(filename2).encode('mbcs')
-    miniaudio._get_filename_bytes = _get_filename_bytes
-
-def miniaudio_stream_audio(filename):
-    info = miniaudio.get_file_info(filename)
-    sample_rate = info.sample_rate
-    nchannels = info.nchannels
-    stream = miniaudio.stream_file(filename, sample_rate=sample_rate, nchannels=nchannels)
-    return MiniaudioStream(None, stream, sample_rate, nchannels)
 
 class FfmpegStream:
     def __init__(self, proc, sample_rate, nchannels):
@@ -124,8 +105,4 @@ def ffmpeg_stream_audio(filename):
     return FfmpegStream(proc, sample_rate, nchannels)
 
 def stream_audio(filename):
-    try:
-        return miniaudio_stream_audio(filename)
-    except Exception:
-        raise
     return ffmpeg_stream_audio(filename)
