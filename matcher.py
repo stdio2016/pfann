@@ -72,7 +72,7 @@ if __name__ == "__main__":
     print('database loaded')
     if isinstance(index, faiss.IndexIVF):
         print('inverse list count:', index.nlist)
-        index.nprobe = 50
+        index.nprobe = params['indexer'].get('nprobe', 50)
         print('num probes:', index.nprobe)
 
     # doing inference, turn off gradient
