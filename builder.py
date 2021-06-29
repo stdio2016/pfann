@@ -65,14 +65,16 @@ if __name__ == "__main__":
         n_mels=params['n_mels'],
         window_fn=torch.hann_window).to(device)
     
-    embeddings = []
+    os.makedirs(dir_for_db, exist_ok=True)
+    embeddings_file = open(os.path.join(dir_for_db, 'embeddings'), 'wb')
     lbl = []
     landmarkKey = []
+    embeddings = 0
     for dat in tqdm.tqdm(loader):
         i, name, wav = dat
         i = int(i) # i is leaking file handles!
         # batch size should be less than 20 because query contains at most 19 segments
-        for batch in DataLoader(wav.squeeze(0), batch_size=16):
+        for batch in torch.split(wav.squeeze(0), 16):
             g = batch.to(device)
             
             # Mel spectrogram
@@ -86,26 +88,27 @@ if __name__ == "__main__":
             z = model(g).cpu()
             for _ in z:
                 lbl.append(i)
-            embeddings.append(z)
+            embeddings_file.write(z.numpy().tobytes())
+            embeddings += z.shape[0]
         landmarkKey.append(int(wav.shape[1]))
-    embeddings = torch.cat(embeddings)
-    print('total', embeddings.shape[0], 'embeddings')
+    embeddings_file.flush()
+    print('total', embeddings, 'embeddings')
     #writer = tensorboardX.SummaryWriter()
     #writer.add_embedding(embeddings, lbl)
     
     # train indexer
     print('training indexer')
     index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
-    os.makedirs(dir_for_db, exist_ok=True)
-    embeddings.numpy().tofile(os.path.join(dir_for_db, 'embeddings'))
     
+    embeddings = np.fromfile(os.path.join(dir_for_db, 'embeddings'), dtype=np.float32).reshape([-1, d])
     if not index.is_trained:
-        index.train(embeddings.numpy())
+        index.verbose = True
+        index.train(embeddings)
     #index = faiss.IndexFlatIP(d)
     
     # write database
     print('writing database')
-    index.add(embeddings.numpy())
+    index.add(embeddings)
     faiss.write_index(index, os.path.join(dir_for_db, 'landmarkValue'))
     
     landmarkKey = np.array(landmarkKey, dtype=np.int32)
