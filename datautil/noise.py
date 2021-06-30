@@ -3,7 +3,6 @@ import os
 import warnings
 
 import tqdm
-import miniaudio
 import numpy as np
 import torch
 with warnings.catch_warnings():
@@ -11,6 +10,7 @@ with warnings.catch_warnings():
     import torchaudio
 
 from simpleutils import get_hash
+from datautil.audio import get_audio
 
 class NoiseData:
     def __init__(self, noise_dir, list_csv, sample_rate, cache_dir):
@@ -24,18 +24,18 @@ class NoiseData:
                 noises.append(row[0])
                 hashes.append(get_hash(row[0]))
         hash = get_hash(''.join(hashes))
-        self.data = self.load_from_cache(list_csv, cache_dir, hash)
-        if self.data is not None:
-            print(self.data.shape)
-            return
+        #self.data = self.load_from_cache(list_csv, cache_dir, hash)
+        #if self.data is not None:
+        #    print(self.data.shape)
+        #    return
         data = []
-        silence_threshold = 1e-3
+        silence_threshold = 0
+        self.names = []
         for name in tqdm.tqdm(noises):
-            info = miniaudio.wav_read_file_f32(os.path.join(noise_dir, name))
-            smp = torch.from_numpy(np.frombuffer(info.samples, dtype=np.float32))
+            smp, smprate = get_audio(os.path.join(noise_dir, name))
+            smp = torch.from_numpy(smp.astype(np.float32))
             
             # convert to mono
-            smp = smp.reshape([-1, info.nchannels]).T
             smp = smp.mean(dim=0)
             
             # strip silence start/end
@@ -46,13 +46,16 @@ class NoiseData:
             has_sound = (abs_smp > silence_threshold).to(torch.int)
             start = int(torch.argmax(has_sound))
             end = has_sound.shape[0] - int(torch.argmax(has_sound.flip(0)))
-            smp = smp[max(start-100, 0) : end+100]
+            smp = smp[max(start, 0) : end]
             
-            resampled = torchaudio.transforms.Resample(info.sample_rate, sample_rate)(smp)
+            resampled = torchaudio.transforms.Resample(smprate, sample_rate)(smp)
             data.append(resampled)
+            self.names.append(name)
         self.data = torch.cat(data)
+        self.boundary = [0] + [x.shape[0] for x in data]
+        self.boundary = torch.LongTensor(self.boundary).cumsum(0)
         del data
-        self.save_to_cache(list_csv, cache_dir, hash, self.data)
+        #self.save_to_cache(list_csv, cache_dir, hash, self.data)
         print(self.data.shape)
     
     def load_from_cache(self, list_csv, cache_dir, hash):
