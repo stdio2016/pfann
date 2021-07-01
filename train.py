@@ -39,9 +39,9 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             T_0=100, eta_min=1e-7)
     os.makedirs(params['model_dir'], exist_ok=True)
     specaug = SpecAugment(params)
-    for epoch in range(100):
+    for epoch in range(params.get('epoch', 100)):
         model.train()
-        tau = 0.05
+        tau = params.get('tau', 0.05)
         print('epoch %d' % (epoch+1))
         losses = []
         if hasattr(train_data, 'mysampler'):
@@ -149,6 +149,12 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             'optimizer': optimizer.state_dict(),
         }
         torch.save(check, os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch))
+        # cleanup old checkpoints
+        if epoch % 10 != 0:
+            try:
+                os.unlink(os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % (epoch-10)))
+            except:
+                pass
         with open(os.path.join(params['model_dir'], 'epochs.txt'), 'w') as fout:
             fout.write('%d\n' % epoch)
     os.makedirs(params['model_dir'], exist_ok=True)
@@ -187,7 +193,7 @@ def test_train(args):
         x_mock = make_false_data(data_N, F_bin, T)
         train_data = DataLoader(x_mock, batch_size=batch_size//2, shuffle=True)
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4 * batch_size/640)
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4) * batch_size/640)
     
     if args.validate:
         val_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=False)
