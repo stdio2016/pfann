@@ -49,8 +49,14 @@ def ffmpeg_get_audio_length(filename):
         return n / smprate, smprate, wav.getnchannels()
         return wav.shape[0] / smprate, smprate, wav.shape[1]
     except (wave.Error, EOFError) as x:
-        print(x)
-        print('failed to decode %s. maybe the file is broken!' % filename)
+        try:
+            n = os.stat(filename).st_size
+            if n == 0:
+                print('file %s is empty!' % filename)
+            else:
+                print('failed to decode %s. maybe the file is broken!' % filename)
+        except:
+            print('failed to stat %s. maybe it is not a file anymore!' % filename)
     return None
 
 def get_audio_length(filename):
