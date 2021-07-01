@@ -104,5 +104,29 @@ def ffmpeg_stream_audio(filename):
         stdout=subprocess.PIPE)
     return FfmpegStream(proc, sample_rate, nchannels)
 
+class WaveStream:
+    def __init__(self, filename):
+        self.file = open(filename, 'rb')
+        self.wave = wave.open(HackExtensibleWave(self.file))
+        self.smpsize = self.wave.getnchannels() * self.wave.getsampwidth()
+        self.sample_rate = self.wave.getframerate()
+        self.nchannels = self.wave.getnchannels()
+        if self.wave.getsampwidth() != 2:
+            raise NotImplementedError('wave stream currently only supports 16bit wav')
+        self.stream = self.gen_stream()
+    def gen_stream(self):
+        num = yield np.array([], dtype=np.int16)
+        if not num: num = 1024
+        while True:
+            dat = self.wave.readframes(num)
+            num = yield np.frombuffer(dat, dtype=np.int16)
+            if not num: num = 1024
+            if len(dat) < num * self.smpsize:
+                break
+
 def stream_audio(filename):
+    try:
+        return WaveStream(filename)
+    except:
+        pass
     return ffmpeg_stream_audio(filename)
