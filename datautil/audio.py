@@ -30,11 +30,16 @@ def ffmpeg_get_audio(filename):
         stdout=subprocess.PIPE,
         bufsize=1000000)
     try:
-        wav = wave.open(HackExtensibleWave(proc.stdout))
+        dat = proc.stdout.read()
+        wav = wave.open(HackExtensibleWave(io.BytesIO(dat)))
+        ch = wav.getnchannels()
+        rate = wav.getframerate()
         n = wav.getnframes()
-        samples = np.frombuffer(wav.readframes(n), dtype=np.int16) / 32768
-        samples = samples.reshape([-1, wav.getnchannels()]).T
-        return samples, wav.getframerate()
+        dat = wav.readframes(n)
+        del wav
+        samples = np.frombuffer(dat, dtype=np.int16) / 32768
+        samples = samples.reshape([-1, ch]).T
+        return samples, rate
     except (wave.Error, EOFError):
         print('failed to decode %s. maybe the file is broken!' % filename)
     return np.array([0])
