@@ -42,7 +42,7 @@ def ffmpeg_get_audio(filename):
         return samples, rate
     except (wave.Error, EOFError):
         print('failed to decode %s. maybe the file is broken!' % filename)
-    return np.array([0])
+    return np.zeros([1, 0]), 44100
 
 def wave_get_audio(filename):
     with open(filename, 'rb') as fin:
