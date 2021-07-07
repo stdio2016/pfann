@@ -64,7 +64,7 @@ def wave_get_audio(filename):
         return samples, wav.getframerate()
 
 def get_audio(filename):
-    if filename.endswith('.wav'):
+    if str(filename).endswith('.wav'):
         try:
             a = wave_get_audio(filename)
             if a: return a
