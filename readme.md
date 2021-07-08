@@ -8,7 +8,7 @@ reproduce paper: Neural Audio Fingerprint for High-specific Audio Retrieval base
 ### FMA dataset
 
 Download fma_medium from https://github.com/mdeff/fma and unzip to
-/path/to/fma_medium .
+`/path/to/fma_medium` .
 
 ```
 python tools/listaudio.py --folder /path/to/fma_medium --out lists/fma_medium.csv
@@ -52,8 +52,7 @@ python tools/traintestsplit.py --csv lists/noise_10s.csv --train lists/noise_tra
 
 ### Microphone impulse response dataset
 
-Go to http://micirp.blogspot.com/ , and download files to a folder named
-"micirp". Then run the commands:
+Go to http://micirp.blogspot.com/ , and download files to `/path/to/micirp`. Then run the commands:
 
 ```
 python tools/listaudio.py --folder /path/to/micirp --out lists/micirp.csv
@@ -63,7 +62,7 @@ python tools/traintestsplit.py --csv lists/micirp.csv --train lists/micirp_train
 ### Aachen Impulse Response Database
 
 Download zip from https://www.iks.rwth-aachen.de/en/research/tools-downloads/databases/aachen-impulse-response-database/
-and unzip to /path/to/AIR_1_4 .
+and unzip to `/path/to/AIR_1_4`.
 
 ```
 python -m datautil.ir /path/to/AIR_1_4 lists/air.csv
