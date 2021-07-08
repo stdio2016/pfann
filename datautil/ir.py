@@ -3,7 +3,6 @@ import csv
 import os
 import warnings
 
-import miniaudio
 import scipy.io
 import numpy as np
 import torch
@@ -11,6 +10,8 @@ import torch.fft
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import torchaudio
+
+from datautil.audio import get_audio
 
 class AIR:
     def __init__(self, air_dir, list_csv, length, fftconv_n, sample_rate=8000):
@@ -58,9 +59,9 @@ class MicIRP:
         data = []
         to_len = int(length * sample_rate)
         for name in mics:
-            info = miniaudio.wav_read_file_f32(os.path.join(mic_dir, name))
-            smp = torch.tensor(np.frombuffer(info.samples, dtype=np.float32))
-            resampled = torchaudio.transforms.Resample(info.sample_rate, sample_rate)(smp)
+            smp, smprate = get_audio(os.path.join(mic_dir, name))
+            smp = torch.FloatTensor(smp).mean(dim=0)
+            resampled = torchaudio.transforms.Resample(smprate, sample_rate)(smp)
             truncated = resampled[0:to_len]
             freqd = torch.fft.rfft(truncated, fftconv_n)
             data.append(freqd)
