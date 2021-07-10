@@ -12,13 +12,16 @@ runs
 
 # the list is too long
 configs/*.csv
-lists/
+lists/*
+!lists/readme.md
 
 # model files
 *.pt
 
 # database files
 db/
+fastdb
+slowdb
 
 # visualize
 *.wav.png
