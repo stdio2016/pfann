@@ -11,6 +11,7 @@ import tqdm
 from model import FpNetwork
 from datautil.noise import NoiseData
 from datautil.ir import AIR, MicIRP
+from simpleutils import read_config
 
 class NumpyMemmapDataset(Dataset):
     def __init__(self, path, dtype):
@@ -32,22 +33,36 @@ class NumpyMemmapDataset(Dataset):
 
 # data augmentation on music dataset
 class MusicSegmentDataset(Dataset):
-    def __init__(self, location: str, len_file: str):
-        # Load music dataset as memory mapped file
-        self.f = NumpyMemmapDataset(location, np.int16)
-        
+    def __init__(self, params, train_val):
+        # load some configs
+        assert train_val in {'train', 'validate'}
+        sample_rate = params['sample_rate']
         self.augmented = True
-        self.segment_size = 8000
-        self.hop_size = 4000
-        self.time_offset = int(8000 * 1.2)
-        self.pad_start = 8000 # include more audio at the left of a segment to simulate reverb
+        self.segment_size = int(params['segment_size'] * sample_rate)
+        self.hop_size = int(params['hop_size'] * sample_rate)
+        self.time_offset = int(params['time_offset'] * sample_rate) # select 1.2s of audio, then choose two random 1s of audios
+        self.pad_start = int(params['pad_start'] * sample_rate) # include more audio at the left of a segment to simulate reverb
+        self.params = params
         
-        self.noise = NoiseData(noise_dir='/musdata/dataset/audioset', list_csv='lists/noise_train.csv', sample_rate=8000, cache_dir=None)
-        self.air = AIR(air_dir='/musdata/dataset/AIR_1_4', list_csv='lists/air_train.csv', length=1, fftconv_n=32768, sample_rate=8000)
-        self.micirp = MicIRP(mic_dir='/musdata/dataset/micirp', list_csv='lists/micirp_train.csv', length=0.5, fftconv_n=32768, sample_rate=8000)
+        # get fft size needed for reverb
+        fftconv_n = 1024
+        air_len = int(params['air']['length'] * sample_rate)
+        ir_len = int(params['micirp']['length'] * sample_rate)
+        fft_needed = self.segment_size + self.pad_start + air_len + ir_len
+        while fftconv_n < fft_needed:
+            fftconv_n *= 2
+        self.fftconv_n = fftconv_n
+
+        # datasets data augmentation
+        self.noise = NoiseData(noise_dir='/musdata/dataset/audioset', list_csv=params['noise'][train_val], sample_rate=sample_rate, cache_dir=None)
+        self.air = AIR(air_dir='/musdata/dataset/AIR_1_4', list_csv=params['air'][train_val], length=params['air']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
+        self.micirp = MicIRP(mic_dir='/musdata/dataset/micirp', list_csv=params['micirp'][train_val], length=params['micirp']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
+
+        # Load music dataset as memory mapped file
+        self.f = NumpyMemmapDataset('cache2/fma_medium_train.bin', np.int16)
         
         # some segmentation settings
-        song_len = np.load(len_file)
+        song_len = np.load('cache2/fma_medium_train_idx.npy')
         self.cues = [] # start location of segment i
         self.offset_left = [] # allowed left shift of segment i
         self.offset_right = [] # allowed right shift of segment i
@@ -93,24 +108,25 @@ class MusicSegmentDataset(Dataset):
         
         # random time offset
         shift_range = self.time_offset - self.segment_size
+        shift_range = 0
         segment_size = self.pad_start + self.segment_size
-        offset1 = torch.randint(high=shift_range, size=(len(x),)).tolist()
-        offset2 = torch.randint(high=shift_range, size=(len(x),)).tolist()
+        offset1 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
+        offset2 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
         x_orig = [xi[off + self.pad_start : off + segment_size] for xi, off in zip(x, offset1)]
         x_orig = torch.Tensor(np.stack(x_orig).astype(np.float32))
         x_aug = [xi[off : off + segment_size] for xi, off in zip(x, offset2)]
         x_aug = torch.Tensor(np.stack(x_aug).astype(np.float32))
         
         # background noise
-        x_aug = self.noise.add_noises(x_aug, 0, 10)
+        x_aug = self.noise.add_noises(x_aug, self.params['noise']['snr_min'], self.params['noise']['snr_max'])
         
         # impulse response
-        spec = torch.fft.rfft(x_aug, 32768)
+        spec = torch.fft.rfft(x_aug, self.fftconv_n)
         if self.air is not None:
             spec *= self.air.random_choose(spec.shape[0])
         if self.micirp is not None:
             spec *= self.micirp.random_choose(spec.shape[0])
-        x_aug = torch.fft.irfft(spec, 32768)[..., self.pad_start:segment_size]
+        x_aug = torch.fft.irfft(spec, self.fftconv_n)[..., self.pad_start:segment_size]
         
         # normalize volume
         x_orig = torch.nn.functional.normalize(x_orig, p=2, dim=1)
@@ -139,9 +155,9 @@ class MusicSegmentDataset(Dataset):
         return self.f[start : end].copy()
 
 class TwoStageShuffler(Sampler):
-    def __init__(self, music_data: MusicSegmentDataset):
+    def __init__(self, music_data: MusicSegmentDataset, shuffle_size):
         self.music_data = music_data
-        self.shuffle_size = 5
+        self.shuffle_size = shuffle_size
         self.shuffle = True
         self.loaded = set()
     
@@ -206,11 +222,12 @@ if __name__ == '__main__':
     import torchaudio
     torch.manual_seed(123)
     mp.set_start_method('spawn')
-    #model = FpNetwork(d=128, h=1024, u=32, F=256, T=32, params={'fuller':True})
+    params = read_config('configs/default.json')
+    model = FpNetwork(d=128, h=1024, u=32, F=256, T=32, params={'fuller':True})
     #model = model.cuda()
-    dataset = MusicSegmentDataset('cache2/fma_medium_train.bin', 'cache2/fma_medium_train_idx.npy')
-    shuffler = TwoStageShuffler(dataset)
-    loader = DataLoader(dataset, sampler=BatchSampler(shuffler, 320, False), batch_size=None, num_workers=4, pin_memory=False, prefetch_factor=5)
+    dataset = MusicSegmentDataset(params, 'validate')
+    shuffler = TwoStageShuffler(dataset, params['shuffle_size'])
+    loader = DataLoader(dataset, sampler=BatchSampler(shuffler, 320, False), batch_size=None, num_workers=4, pin_memory=True, prefetch_factor=5)
     i = 0
     for epoch in range(2):
         for x in tqdm.tqdm(loader):
