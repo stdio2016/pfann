@@ -102,19 +102,14 @@ class MusicSegmentDataset(Dataset):
         x_aug = torch.Tensor(np.stack(x_aug).astype(np.float32))
         
         # background noise
-        noise = self.noise.random_choose(x_aug.shape[0], x_aug.shape[1])
-        vol_x = (x_aug ** 2).mean(dim=1).sqrt()
-        vol_noise = (noise ** 2).mean(dim=1).sqrt()
-        snr = torch.rand(x_aug.shape[0]) * 10
-        ratio = vol_x / vol_noise
-        ratio = torch.where((vol_x == 0) | (vol_noise == 0), torch.tensor(1.0), ratio)
-        ratio *= 10 ** -(snr / 20)
-        x_aug = x_aug + ratio.unsqueeze(1) * noise
+        x_aug = self.noise.add_noises(x_aug, 0, 10)
         
         # impulse response
         spec = torch.fft.rfft(x_aug, 32768)
-        spec *= self.air.random_choose(spec.shape[0])
-        spec *= self.micirp.random_choose(spec.shape[0])
+        if self.air is not None:
+            spec *= self.air.random_choose(spec.shape[0])
+        if self.micirp is not None:
+            spec *= self.micirp.random_choose(spec.shape[0])
         x_aug = torch.fft.irfft(spec, 32768)[..., self.pad_start:segment_size]
         
         # normalize volume
@@ -222,7 +217,7 @@ if __name__ == '__main__':
             i += 1
             if i == 1:
                 wavs = x.permute(1, 0, 2).flatten(1, 2)
-                wavs = torch.nn.functional.normalize(wavs, p=1e999)
+                wavs /= max(wavs.abs().max(), 1e-4)
                 torchaudio.save('trylisten.wav', wavs[:,:8000*30], 8000)
             torch.set_num_threads(1)
             #x = x.cuda()

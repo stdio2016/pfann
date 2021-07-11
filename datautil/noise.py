@@ -100,3 +100,19 @@ class NoiseData:
         if out_name:
             return out, [self.names[x] for x in indices]
         return out
+
+    # x is a 2d array
+    def add_noises(self, x, snr_min, snr_max, out_name=False):
+        eps = 1e-12
+        noise = self.random_choose(x.shape[0], x.shape[1], out_name=out_name)
+        if out_name:
+            noise, noise_name = noise
+        vol_x = torch.clamp((x ** 2).mean(dim=1), min=eps).sqrt()
+        vol_noise = torch.clamp((noise ** 2).mean(dim=1), min=eps).sqrt()
+        snr = torch.FloatTensor(x.shape[0]).uniform_(snr_min, snr_max)
+        ratio = vol_x / vol_noise
+        ratio *= 10 ** -(snr / 20)
+        x_aug = x + ratio.unsqueeze(1) * noise
+        if out_name:
+            return x_aug, noise_name, snr
+        return x_aug
