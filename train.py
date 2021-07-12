@@ -206,7 +206,7 @@ def test_train(args):
     train(model, optimizer, train_data, val_data, batch_size, device, params, writer)
 
 if __name__ == "__main__":
-    torch.set_deterministic(True)
+    torch.use_deterministic_algorithms(True)
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-d', '--data')
