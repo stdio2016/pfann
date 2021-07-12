@@ -1,7 +1,7 @@
 {
-  "train_csv": "configs/train.csv",
-  "validate_csv": "configs/validate.csv",
-  "test_csv": "configs/test.csv",
+  "train_csv": "lists/fma_medium_train.csv",
+  "validate_csv": "lists/fma_medium_val.csv",
+  "test_csv": "lists/test.csv",
   "model_dir": "n640d128",
   "cache_dir": "caches",
   "batch_size": 640,
@@ -18,22 +18,22 @@
   "segment_size": 1,
   "hop_size": 0.5,
   "time_offset": 1.2,
-  "pad_start": 0,
+  "pad_start": 1,
   "noise": {
-    "train": "configs/noise_train.csv",
-    "validate": "configs/noise_val.csv",
+    "train": "lists/noise_train.csv",
+    "validate": "lists/noise_val.csv",
     "snr_max": 10,
     "snr_min": 0
   },
   "micirp": {
-    "train": "configs/micirp_train.csv",
-    "validate": "configs/micirp_val.csv",
-    "length": 0.05
+    "train": "lists/micirp_train.csv",
+    "validate": "lists/micirp_val.csv",
+    "length": 0.5
   },
   "air": {
-    "train": "configs/air_train.csv",
-    "validate": "configs/air_val.csv",
-    "length": 0.05
+    "train": "lists/air_train.csv",
+    "validate": "lists/air_val.csv",
+    "length": 1
   },
   "cutout_min": 0.1,
   "cutout_max": 0.5,

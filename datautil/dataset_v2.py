@@ -11,6 +11,7 @@ import tqdm
 from model import FpNetwork
 from datautil.noise import NoiseData
 from datautil.ir import AIR, MicIRP
+from datautil.preprocess import preprocess_music
 from simpleutils import read_config
 
 class NumpyMemmapDataset(Dataset):
@@ -54,15 +55,23 @@ class MusicSegmentDataset(Dataset):
         self.fftconv_n = fftconv_n
 
         # datasets data augmentation
-        self.noise = NoiseData(noise_dir='/musdata/dataset/audioset', list_csv=params['noise'][train_val], sample_rate=sample_rate, cache_dir=None)
+        cache_dir = params['cache_dir']
+        os.makedirs(cache_dir, exist_ok=True)
+        self.noise = NoiseData(noise_dir='/musdata/dataset/audioset', list_csv=params['noise'][train_val], sample_rate=sample_rate, cache_dir=cache_dir)
         self.air = AIR(air_dir='/musdata/dataset/AIR_1_4', list_csv=params['air'][train_val], length=params['air']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
         self.micirp = MicIRP(mic_dir='/musdata/dataset/micirp', list_csv=params['micirp'][train_val], length=params['micirp']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
 
         # Load music dataset as memory mapped file
-        self.f = NumpyMemmapDataset('cache2/fma_medium_train.bin', np.int16)
+        file_name = os.path.splitext(os.path.split(params[train_val + '_csv'])[1])[0]
+        file_name = os.path.join(cache_dir, '1' + file_name)
+        if os.path.exists(file_name + '.bin'):
+            print('load cached music from %s.bin' % file_name)
+        else:
+            preprocess_music('/musdata/dataset/fma_medium', params[train_val + '_csv'], sample_rate, file_name)
+        self.f = NumpyMemmapDataset(file_name + '.bin', np.int16)
         
         # some segmentation settings
-        song_len = np.load('cache2/fma_medium_train_idx.npy')
+        song_len = np.load(file_name + '.npy')
         self.cues = [] # start location of segment i
         self.offset_left = [] # allowed left shift of segment i
         self.offset_right = [] # allowed right shift of segment i
@@ -197,7 +206,6 @@ class TwoStageShuffler(Sampler):
             for i, idx in enumerate(shuffle_segs):
                 # output shuffled segment idx
                 yield idx
-                #if nc == 0 and i < 30: print(idx)
                 
                 # preload next chunk
                 while len(self.loaded) < len(shuffle_song) and preload_cnt * len(shuffle_segs) < (i+1) * self.shuffle_size:
