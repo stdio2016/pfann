@@ -39,6 +39,7 @@ class MusicSegmentDataset(Dataset):
         assert train_val in {'train', 'validate'}
         sample_rate = params['sample_rate']
         self.augmented = True
+        self.eval_time_shift = True
         self.segment_size = int(params['segment_size'] * sample_rate)
         self.hop_size = int(params['hop_size'] * sample_rate)
         self.time_offset = int(params['time_offset'] * sample_rate) # select 1.2s of audio, then choose two random 1s of audios
@@ -94,10 +95,10 @@ class MusicSegmentDataset(Dataset):
         self.offset_left = torch.LongTensor(self.offset_left)
         self.offset_right = torch.LongTensor(self.offset_right)
     
-    def get_single_segment(self, idx):
-        cue = int(self.cues[idx])
-        left = int(self.offset_left[idx])
-        right = int(self.offset_right[idx])
+    def get_single_segment(self, idx, offset, length):
+        cue = int(self.cues[idx]) + offset
+        left = int(self.offset_left[idx]) + offset
+        right = int(self.offset_right[idx]) - offset
         
         # choose a segment
         # segment looks like:
@@ -105,29 +106,43 @@ class MusicSegmentDataset(Dataset):
         #             v
         # [ pad_start | segment_size |   ...  ]
         #             \---   time_offset   ---/
-        segment = self.f[cue - min(left, self.pad_start): cue + min(right, self.time_offset)]
-        segment = np.pad(segment, [max(0, self.pad_start-left), max(0, self.time_offset-right)])
+        segment = self.f[cue - min(left, self.pad_start): cue + min(right, length)]
+        segment = np.pad(segment, [max(0, self.pad_start-left), max(0, length-right)])
         
         # convert 16 bit to float
         return segment * np.float32(1/32768)
     
     def __getitem__(self, indices):
-        # collect all segments. It is faster to do batch processing
-        x = [self.get_single_segment(i) for i in indices]
+        if self.eval_time_shift:
+            # collect all segments. It is faster to do batch processing
+            shift_range = self.segment_size//2
+            x = [self.get_single_segment(i, -self.segment_size//4, self.segment_size+shift_range) for i in indices]
+
+            # random time offset only on augmented segment, as a query audio
+            segment_size = self.pad_start + self.segment_size
+            offset1 = [self.segment_size//4] * len(x)
+            offset2 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
+        else:
+            # collect all segments. It is faster to do batch processing
+            x = [self.get_single_segment(i, 0, self.time_offset) for i in indices]
         
-        # random time offset
-        shift_range = self.time_offset - self.segment_size
-        shift_range = 0
-        segment_size = self.pad_start + self.segment_size
-        offset1 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
-        offset2 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
+            # random time offset
+            shift_range = self.time_offset - self.segment_size
+            segment_size = self.pad_start + self.segment_size
+            offset1 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
+            offset2 = torch.randint(high=shift_range+1, size=(len(x),)).tolist()
+
         x_orig = [xi[off + self.pad_start : off + segment_size] for xi, off in zip(x, offset1)]
         x_orig = torch.Tensor(np.stack(x_orig).astype(np.float32))
         x_aug = [xi[off : off + segment_size] for xi, off in zip(x, offset2)]
         x_aug = torch.Tensor(np.stack(x_aug).astype(np.float32))
-        
+
+        if not self.augmented:
+            return x_orig
+ 
         # background noise
-        x_aug = self.noise.add_noises(x_aug, self.params['noise']['snr_min'], self.params['noise']['snr_max'])
+        if self.noise is not None:
+            x_aug = self.noise.add_noises(x_aug, self.params['noise']['snr_min'], self.params['noise']['snr_max'])
         
         # impulse response
         spec = torch.fft.rfft(x_aug, self.fftconv_n)
@@ -135,7 +150,8 @@ class MusicSegmentDataset(Dataset):
             spec *= self.air.random_choose(spec.shape[0])
         if self.micirp is not None:
             spec *= self.micirp.random_choose(spec.shape[0])
-        x_aug = torch.fft.irfft(spec, self.fftconv_n)[..., self.pad_start:segment_size]
+        x_aug = torch.fft.irfft(spec, self.fftconv_n)
+        x_aug = x_aug[..., self.pad_start:segment_size]
         
         # normalize volume
         x_orig = torch.nn.functional.normalize(x_orig, p=2, dim=1)
@@ -169,7 +185,13 @@ class TwoStageShuffler(Sampler):
         self.shuffle_size = shuffle_size
         self.shuffle = True
         self.loaded = set()
+        self.generator = torch.Generator()
+        self.generator2 = torch.Generator()
     
+    def set_epoch(self, epoch):
+        self.generator.manual_seed(42 + epoch)
+        self.generator2.manual_seed(42 + epoch)
+
     def __len__(self):
         return len(self.music_data)
     
@@ -177,10 +199,17 @@ class TwoStageShuffler(Sampler):
         if song_id not in self.loaded:
             self.music_data.preload_song(song_id)
             self.loaded.add(song_id)
+
+    def baseline_shuffle(self):
+        # the same as DataLoader with shuffle=True, but with a music preloader
+        for song in range(self.music_data.get_num_songs()):
+            self.preload(song)
+
+        yield from torch.randperm(len(self), generator=self.generator).tolist()
     
     def shuffling_iter(self):
         # shuffle song list first
-        shuffle_song = torch.randperm(self.music_data.get_num_songs())
+        shuffle_song = torch.randperm(self.music_data.get_num_songs(), generator=self.generator)
         
         # split song list into chunks
         chunks = torch.split(shuffle_song, self.shuffle_size)
@@ -200,7 +229,7 @@ class TwoStageShuffler(Sampler):
                     self.preload(song)
             
             # shuffle segments from song chunk
-            shuffle_segs = torch.randperm(len(buf))
+            shuffle_segs = torch.randperm(len(buf), generator=self.generator2)
             shuffle_segs = [buf[x] for x in shuffle_segs]
             preload_cnt = 0
             for i, idx in enumerate(shuffle_segs):
@@ -216,28 +245,73 @@ class TwoStageShuffler(Sampler):
     def non_shuffling_iter(self):
         # just return 0 ... len(dataset)-1
         yield from range(len(self))
-    
+
     def __iter__(self):
         if self.shuffle:
-            return self.shuffling_iter()
+            if self.shuffle_size is None:
+                return self.baseline_shuffle()
+            else:
+                return self.shuffling_iter()
         return self.non_shuffling_iter()
 
+# since instantiating a DataLoader of MusicSegmentDataset is hard, I provide a data loader builder
 class SegmentedDataLoader:
-    def __init__(self):
-        pass
+    def __init__(self, train_val, configs, num_workers=4, pin_memory=False, prefetch_factor=2):
+        assert train_val in {'train', 'validate'}
+        self.dataset = MusicSegmentDataset(configs, train_val)
+        assert configs['batch_size'] % 2 == 0
+        self.batch_size = configs['batch_size']
+        self.shuffler = TwoStageShuffler(self.dataset, configs['shuffle_size'])
+        self.sampler = BatchSampler(self.shuffler, self.batch_size//2, False)
+        self.num_workers = num_workers
+        self.configs = configs
+        self.pin_memory = pin_memory
+        self.prefetch_factor = prefetch_factor
+
+        # you can change shuffle to True/False
+        self.shuffle = True
+        # you can change augmented to True/False
+        self.augmented = True
+        # you can change eval time shift to True/False
+        self.eval_time_shift = False
+
+        self.loader = DataLoader(
+            self.dataset,
+            sampler=self.sampler,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            prefetch_factor=self.prefetch_factor
+        )
+
+    def set_epoch(self, epoch):
+        self.shuffler.set_epoch(epoch)
+
+    def __iter__(self):
+        self.dataset.augmented = self.augmented
+        self.dataset.eval_time_shift = self.eval_time_shift
+        self.shuffler.shuffle = self.shuffle
+        return iter(self.loader)
+
+    def __len__(self):
+        return len(self.loader)
 
 if __name__ == '__main__':
     import torchaudio
     torch.manual_seed(123)
+    torch.cuda.manual_seed(123)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
     mp.set_start_method('spawn')
     params = read_config('configs/default.json')
     model = FpNetwork(d=128, h=1024, u=32, F=256, T=32, params={'fuller':True})
     #model = model.cuda()
-    dataset = MusicSegmentDataset(params, 'validate')
-    shuffler = TwoStageShuffler(dataset, params['shuffle_size'])
-    loader = DataLoader(dataset, sampler=BatchSampler(shuffler, 320, False), batch_size=None, num_workers=4, pin_memory=True, prefetch_factor=5)
+    loader = SegmentedDataLoader('validate', params)
+    loader.shuffle = True
+    loader.eval_time_shift = False
     i = 0
     for epoch in range(2):
+        loader.set_epoch(epoch)
         for x in tqdm.tqdm(loader):
             i += 1
             if i == 1:
