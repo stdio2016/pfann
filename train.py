@@ -46,6 +46,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
         # set dataloadet to train mode
         train_data.shuffle = True
         train_data.eval_time_shift = False
+        train_data.augmented = True
         train_data.set_epoch(epoch)
 
         if params['no_train']:
@@ -92,6 +93,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             # set dataloader to eval mode
             train_data.shuffle = False
             train_data.eval_time_shift = True
+            train_data.augmented = False
 
             for x in tqdm(train_data, desc='train data', ncols=80):
                 x = x[:, 0]
