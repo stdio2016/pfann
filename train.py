@@ -12,8 +12,7 @@ import tensorboardX
 import torch_optimizer as optim
 
 from model import FpNetwork
-import datautil.dataset
-from datautil.dataset import build_data_loader
+from datautil.dataset_v2 import SegmentedDataLoader
 from datautil.mock_data import make_false_data
 import simpleutils
 from datautil.specaug import SpecAugment
@@ -44,11 +43,11 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
         tau = params.get('tau', 0.05)
         print('epoch %d' % (epoch+1))
         losses = []
-        if hasattr(train_data, 'mysampler'):
-            train_data.mysampler.shuffle = True
-            train_data.mysampler.set_epoch(epoch)
-        if isinstance(train_data.dataset, datautil.dataset.MyDataset):
-            train_data.dataset.augmented = True
+        # set dataloadet to train mode
+        train_data.shuffle = True
+        train_data.eval_time_shift = False
+        train_data.set_epoch(epoch)
+
         if params['no_train']:
             pbar = []
         else:
@@ -90,12 +89,12 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
         with torch.no_grad():
             print('validating')
             x_embed = []
-            if hasattr(train_data, 'mysampler'):
-                train_data.mysampler.shuffle = False
-            if isinstance(train_data.dataset, datautil.dataset.MyDataset):
-                train_data.dataset.augmented = False
+            # set dataloader to eval mode
+            train_data.shuffle = False
+            train_data.eval_time_shift = True
+
             for x in tqdm(train_data, desc='train data', ncols=80):
-                x = torch.flatten(x, 0, 1)
+                x = x[:, 0]
                 for xx in torch.split(x, minibatch):
                     y = model(xx.to(device)).cpu()
                     x_embed.append(y)
@@ -186,8 +185,8 @@ def test_train(args):
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
     if args.data:
-        train_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=True)
-        print('training data contains %d samples' % len(train_data.mydataset))
+        train_data = SegmentedDataLoader('train', params)
+        print('training data contains %d samples' % len(train_data.dataset))
     else:
         data_N = 2000
         x_mock = make_false_data(data_N, F_bin, T)
@@ -195,11 +194,11 @@ def test_train(args):
     
     optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4) * batch_size/640)
     
-    if args.validate:
-        val_data = build_data_loader(params, args.data, args.noise, args.air, args.micirp, for_train=False)
-        val_data.mysampler.shuffle = False
-        val_data.mydataset.spec_augment = False
-        print('validation data contains %d samples' % len(val_data.mydataset))
+    if args.data:
+        val_data = SegmentedDataLoader('validate', params)
+        val_data.shuffle = False
+        val_data.eval_time_shift = True
+        print('validation data contains %d samples' % len(val_data.dataset))
     else:
         validate_N = 160
         y_mock = make_false_data(validate_N, F_bin, T)

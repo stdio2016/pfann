@@ -6,6 +6,7 @@ import torch
 import torch.fft
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, Dataset, Sampler, BatchSampler
+import torchaudio
 import tqdm
 
 from model import FpNetwork
@@ -94,6 +95,16 @@ class MusicSegmentDataset(Dataset):
         self.cues = torch.LongTensor(self.cues)
         self.offset_left = torch.LongTensor(self.offset_left)
         self.offset_right = torch.LongTensor(self.offset_right)
+
+        # setup mel spectrogram
+        self.mel = torchaudio.transforms.MelSpectrogram(
+                sample_rate=sample_rate,
+                n_fft=self.params['stft_n'],
+                hop_length=self.params['stft_hop'],
+                f_min=self.params['f_min'],
+                f_max=self.params['f_max'],
+                n_mels=self.params['n_mels'],
+                window_fn=torch.hann_window)
     
     def get_single_segment(self, idx, offset, length):
         cue = int(self.cues[idx]) + offset
@@ -158,7 +169,10 @@ class MusicSegmentDataset(Dataset):
         x_aug = torch.nn.functional.normalize(x_aug, p=2, dim=1)
         
         # output [x1_orig, x1_aug, x2_orig, x2_aug, ...]
-        return torch.stack([x_orig, x_aug], dim=1)
+        x = torch.stack([x_orig, x_aug], dim=1)
+        if self.mel is not None:
+            return self.mel(x)
+        return x
     
     def fan_si_le(self):
         raise NotImplementedError('煩死了')
@@ -297,7 +311,6 @@ class SegmentedDataLoader:
         return len(self.loader)
 
 if __name__ == '__main__':
-    import torchaudio
     torch.manual_seed(123)
     torch.cuda.manual_seed(123)
     torch.backends.cudnn.benchmark = False
@@ -309,6 +322,7 @@ if __name__ == '__main__':
     loader = SegmentedDataLoader('validate', params)
     loader.shuffle = True
     loader.eval_time_shift = False
+    loader.dataset.mel = None
     i = 0
     for epoch in range(2):
         loader.set_epoch(epoch)
