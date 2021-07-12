@@ -148,28 +148,28 @@ class MusicSegmentDataset(Dataset):
         x_aug = [xi[off : off + segment_size] for xi, off in zip(x, offset2)]
         x_aug = torch.Tensor(np.stack(x_aug).astype(np.float32))
 
-        if not self.augmented:
-            return x_orig
- 
-        # background noise
-        if self.noise is not None:
-            x_aug = self.noise.add_noises(x_aug, self.params['noise']['snr_min'], self.params['noise']['snr_max'])
+        if self.augmented:
+            # background noise
+            if self.noise is not None:
+                x_aug = self.noise.add_noises(x_aug, self.params['noise']['snr_min'], self.params['noise']['snr_max'])
         
-        # impulse response
-        spec = torch.fft.rfft(x_aug, self.fftconv_n)
-        if self.air is not None:
-            spec *= self.air.random_choose(spec.shape[0])
-        if self.micirp is not None:
-            spec *= self.micirp.random_choose(spec.shape[0])
-        x_aug = torch.fft.irfft(spec, self.fftconv_n)
-        x_aug = x_aug[..., self.pad_start:segment_size]
+            # impulse response
+            spec = torch.fft.rfft(x_aug, self.fftconv_n)
+            if self.air is not None:
+                spec *= self.air.random_choose(spec.shape[0])
+            if self.micirp is not None:
+                spec *= self.micirp.random_choose(spec.shape[0])
+            x_aug = torch.fft.irfft(spec, self.fftconv_n)
+            x_aug = x_aug[..., self.pad_start:segment_size]
         
         # normalize volume
         x_orig = torch.nn.functional.normalize(x_orig, p=2, dim=1)
-        x_aug = torch.nn.functional.normalize(x_aug, p=2, dim=1)
+        if self.augmented:
+            x_aug = torch.nn.functional.normalize(x_aug, p=2, dim=1)
         
         # output [x1_orig, x1_aug, x2_orig, x2_aug, ...]
-        x = torch.stack([x_orig, x_aug], dim=1)
+        x = [x_orig, x_aug] if self.augmented else [x_orig]
+        x = torch.stack(x, dim=1)
         if self.mel is not None:
             return self.mel(x)
         return x
@@ -322,6 +322,7 @@ if __name__ == '__main__':
     loader = SegmentedDataLoader('validate', params)
     loader.shuffle = True
     loader.eval_time_shift = False
+    loader.augmented = False
     loader.dataset.mel = None
     i = 0
     for epoch in range(2):
