@@ -26,3 +26,8 @@ slowdb
 # visualize
 *.wav.png
 *.mp3.png
+
+# compile file
+faisscputest.exe
+faisscputest.obj
+faisscputest
