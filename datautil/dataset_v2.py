@@ -171,7 +171,7 @@ class MusicSegmentDataset(Dataset):
         x = [x_orig, x_aug] if self.augmented else [x_orig]
         x = torch.stack(x, dim=1)
         if self.mel is not None:
-            return self.mel(x)
+            return torch.log(self.mel(x).clamp(min=1e-8))
         return x
     
     def fan_si_le(self):
