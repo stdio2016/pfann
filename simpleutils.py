@@ -1,7 +1,8 @@
 # every utils that don't use torch
+import csv
 import hashlib
-import time
 import json
+import time
 
 class Timing():
     def __init__(self, name='run time'):
@@ -24,3 +25,18 @@ def get_hash(s):
 def read_config(path):
     with open(path, 'r') as fin:
         return json.load(fin)
+
+def read_file_list(list_file):
+    files = []
+    if list_file.endswith('.csv'):
+        with open(list_file, 'r') as fin:
+            reader = csv.reader(fin)
+            firstrow = next(reader)
+            files = [row[0] for row in reader]
+    else:
+        with open(list_file, 'r', encoding='utf8') as fin:
+            for line in fin:
+                if line.endswith('\n'):
+                    line = line[:-1]
+                files.append(line)
+    return files

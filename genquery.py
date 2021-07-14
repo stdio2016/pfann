@@ -167,12 +167,7 @@ if __name__ == '__main__':
     else:
         micirp = None
     
-    with open(params[train_val_test + '_csv'], 'r') as fin:
-        music_list = []
-        reader = csv.reader(fin)
-        next(reader)
-        for line in reader:
-            music_list.append(line[0])
+    music_list = simpleutils.read_file_list(params[train_val_test + '_csv'])
     
     gen = QueryGen(args.data, music_list, noise, air, micirp, args.length, args.num, params)
     runall = torch.utils.data.DataLoader(

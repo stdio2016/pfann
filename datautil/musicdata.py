@@ -5,6 +5,8 @@ import torch.nn.functional as F
 
 from datautil.audio import stream_audio
 
+import simpleutils
+
 class MusicDataset(torch.utils.data.Dataset):
     def __init__(self, file_list, params):
         self.params = params
@@ -12,12 +14,7 @@ class MusicDataset(torch.utils.data.Dataset):
         self.segment_size = int(self.sample_rate * self.params['segment_size'])
         self.hop_size = int(self.sample_rate * self.params['hop_size'])
         self.frame_shift_mul = self.params['indexer'].get('frame_shift_mul', 1)
-        with open(file_list, 'r', encoding='utf8') as fin:
-            self.files = []
-            for x in fin:
-                if x.endswith('\n'):
-                    x = x[:-1]
-                self.files.append(x)
+        self.files = simpleutils.read_file_list(file_list)
     
     def __getitem__(self, index):
         smprate = self.sample_rate

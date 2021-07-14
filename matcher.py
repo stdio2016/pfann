@@ -57,11 +57,7 @@ if __name__ == "__main__":
     print('model loaded')
     
     print('loading database...')
-    with open(os.path.join(dir_for_db, 'songList.txt'), 'r', encoding='utf8') as fin:
-        songList = []
-        for line in fin:
-            if line.endswith('\n'): line = line[:-1]
-            songList.append(line)
+    songList = simpleutils.read_file_list(os.path.join(dir_for_db, 'songList.txt'))
     
     landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int32)
     index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
