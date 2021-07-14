@@ -94,18 +94,25 @@ class FfmpegStream:
                 break
 
 def ffmpeg_stream_audio(filename):
+    while 1:
+        try:
+            stderr=open(os.devnull, 'w')
+            stdin=open(os.devnull)
+            break
+        except PermissionError:
+            print('PermissionError occured, try again')
     proc = subprocess.Popen(['ffprobe', '-i', filename, '-show_streams',
             '-select_streams', 'a', '-print_format', 'json'],
-        stderr=open(os.devnull, 'w'),
-        stdin=open(os.devnull),
+        stderr=stderr,
+        stdin=stdin,
         stdout=subprocess.PIPE)
     prop = json.loads(proc.stdout.read())
     sample_rate = int(prop['streams'][0]['sample_rate'])
     nchannels = prop['streams'][0]['channels']
     proc = subprocess.Popen(['ffmpeg', '-i', filename,
             '-f', 's16le', '-acodec', 'pcm_s16le', 'pipe:1'],
-        stderr=open(os.devnull, 'w'),
-        stdin=open(os.devnull),
+        stderr=stderr,
+        stdin=stdin,
         stdout=subprocess.PIPE)
     return FfmpegStream(proc, sample_rate, nchannels)
 
