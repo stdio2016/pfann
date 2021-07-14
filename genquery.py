@@ -2,6 +2,7 @@ import argparse
 import csv
 import os
 import warnings
+import json
 
 import numpy as np
 import torch
@@ -38,6 +39,7 @@ class QueryGen(torch.utils.data.Dataset):
         self.sample_rate = params['sample_rate']
     
     def __getitem__(self, index):
+        torch.manual_seed(9000 + index)
         # load music
         name = self.music_list[index % len(self.music_list)]
         audio, smprate = get_audio(os.path.join(self.music_dir, name))
@@ -47,13 +49,13 @@ class QueryGen(torch.utils.data.Dataset):
         pad_smp = int(smprate * self.pad_start)
         hop_smp = int(smprate * self.params['hop_size'])
         if audio.shape[1] >= sel_smp:
-            time_offset = torch.randint(low=0, high=audio.shape[1]-sel_smp, size=(1,))
+            time_offset = torch.randint(low=0, high=audio.shape[1]-sel_smp, size=(1,)).item()
             audio = audio[:, max(0,time_offset-pad_smp):time_offset+sel_smp]
             audio = np.pad(audio, ((0,0), (max(pad_smp-time_offset,0),0)))
         else:
             time_offset = 0
             audio = np.pad(audio, ((0,0), (pad_smp, sel_smp-audio.shape[1])))
-        audio = torch.from_numpy(audio)
+        audio = torch.from_numpy(audio.astype(np.float32))
         
         # stereo to mono and resample
         audio = audio.mean(dim=0)
@@ -104,7 +106,7 @@ class QueryGen(torch.utils.data.Dataset):
         # normalize volume
         audio = F.normalize(audio, p=np.inf, dim=0)
         
-        return name, time_offset/smprate, audio, snr, reverb
+        return name, time_offset/smprate, audio, snr.item(), reverb
     
     def __len__(self):
         return self.num_queries
@@ -120,11 +122,21 @@ if __name__ == '__main__':
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('-l', '--length', type=float, default=1)
     args.add_argument('--num', type=int, default=10)
+    args.add_argument('--mode', default='test', choices=['train', 'validate', 'test'])
     args.add_argument('-o', '--out', required=True)
     args = args.parse_args()
     
+    # warn user (actually just me!) if query files exist
+    if os.path.exists(args.out):
+        yesno = input('Folder %s exists, overwrite anyway? (y/n) ' % args.out)
+        while yesno not in {'y', 'n'}:
+            yesno = input('Please enter y or n: ')
+        if yesno == 'n':
+            exit()
+    
     params = simpleutils.read_config(args.params)
-    train_val = 'validate'
+    train_val = 'validate' if args.mode == 'test' else args.mode
+    train_val_test = args.mode
     sample_rate = params['sample_rate']
     win = (params['pad_start'] + args.length + params['air']['length'] + params['micirp']['length']) * sample_rate
     fftconv_n = 2048
@@ -155,7 +167,7 @@ if __name__ == '__main__':
     else:
         micirp = None
     
-    with open(params['test_csv'], 'r') as fin:
+    with open(params[train_val_test + '_csv'], 'r') as fin:
         music_list = []
         reader = csv.reader(fin)
         next(reader)
@@ -165,7 +177,8 @@ if __name__ == '__main__':
     gen = QueryGen(args.data, music_list, noise, air, micirp, args.length, args.num, params)
     runall = torch.utils.data.DataLoader(
         dataset=gen,
-        num_workers=3
+        num_workers=3,
+        batch_size=None
     )
     os.makedirs(args.out, exist_ok=True)
     fout = open(os.path.join(args.out, 'expected.csv'), 'w', encoding='utf8', newline='\n')
@@ -173,9 +186,14 @@ if __name__ == '__main__':
     writer = csv.writer(fout)
     writer.writerow(['query', 'answer', 'time', 'snr', 'reverb'])
     for i, (name,time_offset,sound,snr,reverb) in enumerate(tqdm.tqdm(runall)):
-        writer.writerow(['q%04d.wav' % (i+1), name[0], float(time_offset), float(snr), reverb[0]])
-        path = os.path.join(args.out, 'q%04d.wav' % (i+1))
-        torchaudio.save(path, sound, gen.sample_rate)
+        safe_name = os.path.splitext(os.path.split(name)[1])[0]
+        out_name = 'q%04d_%s_snr%d_%s.wav' % (i+1, safe_name, round(snr), reverb)
+        writer.writerow([out_name, name, time_offset, snr, reverb])
+        path = os.path.join(args.out, out_name)
+        torchaudio.save(path, sound.unsqueeze(0), gen.sample_rate, encoding='PCM_S', bits_per_sample=16)
         fout2.write(path + '\n')
     fout.close()
     fout2.close()
+    params['genquery'] = {'mode': train_val_test, 'length': args.length}
+    with open(os.path.join(args.out, 'configs.json'), 'w') as fout:
+        json.dump(params, fout, indent=2)
