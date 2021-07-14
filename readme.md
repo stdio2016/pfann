@@ -13,7 +13,8 @@ Download fma_medium from https://github.com/mdeff/fma and unzip to
 ```
 python tools/listaudio.py --folder /path/to/fma_medium --out lists/fma_medium.csv
 python tools/filterduration.py --csv lists/fma_medium.csv --min-len 29.9 --out lists/fma_medium_30s.csv
-python tools/traintestsplit.py --csv lists/fma_medium_30s.csv --train lists/fma_medium_train.csv --train-size 8000 --test lists/fma_medium_val.csv --test-size 2000
+python tools/traintestsplit.py --csv lists/fma_medium_30s.csv --train lists/fma_medium_train.csv --train-size 10000 --test lists/fma_medium_valtest.csv --test-size 1000
+python tools/traintestsplit.py --csv lists/fma_medium_valtest.csv --train lists/fma_medium_val.csv --train-size 500 --test lists/fma_medium_test.csv --test-size 500
 ```
 
 ### AudioSet
@@ -82,10 +83,29 @@ python genquery.py -d /path/to/fma_medium/ --noise /path/to/audioset/ --micirp /
 
 ## Builder
 ```
-python builder.py /path/to/music_list.txt /path/to/db configs/default.json
+python tools/csv2txt.py --dir /path/to/fma_medium list/fma_medium_train.csv --out build_fma_medium_train.txt
+python tools/csv2txt.py --dir /path/to/fma_medium list/fma_medium_test.csv --out build_fma_medium_test.txt
+cat build_fma_medium_train.txt build_fma_medium_test.txt > build_fma_medium.txt
+python builder.py build_fma_medium.txt /path/to/db configs/default.json
+```
+
+Usage of `builder.py`:
+```
+python builder.py <music list> <output db location> <model config>
 ```
 
 ## Matcher
 ```
-python matcher.py /path/to/query_list.txt /path/to/db /path/to/result.txt
+python matcher.py /path/to/query6s/list.txt /path/to/db /path/to/result.txt
+```
+Will output `result.txt`, `result.bin`, and `result_detail.csv` files.
+
+Usage of `matcher.py`:
+```
+python builder.py <query list> <db location> <output result file>
+```
+
+## Evaluation
+```
+python tools/accuracy.py /path/to/query6s/expected.csv /path/to/result_detail.csv
 ```
