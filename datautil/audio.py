@@ -7,6 +7,8 @@ import numpy as np
 import wave
 import io
 
+import simpleutils
+
 # because builtin wave won't read wav files with more than 2 channels
 class HackExtensibleWave:
     def __init__(self, stream):
@@ -73,15 +75,19 @@ def get_audio(filename):
     return ffmpeg_get_audio(filename)
 
 class FfmpegStream:
-    def __init__(self, proc, sample_rate, nchannels):
+    def __init__(self, proc, sample_rate, nchannels, tmpfile):
         self.proc = proc
         self.sample_rate = sample_rate
         self.nchannels = nchannels
+        self.tmpfile = None
         self.stream = self.gen_stream()
+        self.tmpfile = tmpfile
     def __del__(self):
         self.proc.terminate()
         self.proc.communicate()
         del self.proc
+        if self.tmpfile:
+            os.unlink(self.tmpfile)
     def gen_stream(self):
         num = yield np.array([], dtype=np.int16)
         if not num: num = 1024
@@ -114,10 +120,14 @@ def ffmpeg_stream_audio(filename):
         stderr=stderr,
         stdin=stdin,
         stdout=subprocess.PIPE)
-    return FfmpegStream(proc, sample_rate, nchannels)
+    tmpfile = None
+    if is_tmp:
+        tmpfile = filename
+    return FfmpegStream(proc, sample_rate, nchannels, tmpfile=tmpfile)
 
 class WaveStream:
-    def __init__(self, filename):
+    def __init__(self, filename, is_tmp=False):
+        self.is_tmp = None
         self.file = open(filename, 'rb')
         self.wave = wave.open(HackExtensibleWave(self.file))
         self.smpsize = self.wave.getnchannels() * self.wave.getsampwidth()
@@ -126,6 +136,7 @@ class WaveStream:
         if self.wave.getsampwidth() != 2:
             raise NotImplementedError('wave stream currently only supports 16bit wav')
         self.stream = self.gen_stream()
+        self.is_tmp = filename if is_tmp else None
     def gen_stream(self):
         num = yield np.array([], dtype=np.int16)
         if not num: num = 1024
@@ -135,10 +146,22 @@ class WaveStream:
             if not num: num = 1024
             if len(dat) < num * self.smpsize:
                 break
+    def __del__(self):
+        if self.is_tmp:
+            os.unlink(self.is_tmp)
 
 def stream_audio(filename):
+    is_tmp = False
+    if filename.startswith('s3://'):
+        tmpname = simpleutils.download_tmp_from_s3(filename)
+        is_tmp = True
+        filename = tmpname
     try:
-        return WaveStream(filename)
+        return WaveStream(filename, is_tmp=is_tmp)
     except:
         pass
-    return ffmpeg_stream_audio(filename)
+    try:
+        return ffmpeg_stream_audio(filename, is_tmp=is_tmp)
+    except:
+        os.unlink(tmpname)
+        raise
