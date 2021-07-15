@@ -99,7 +99,7 @@ class FfmpegStream:
             if len(dat) < to_read:
                 break
 
-def ffmpeg_stream_audio(filename):
+def ffmpeg_stream_audio(filename, is_tmp=False):
     while 1:
         try:
             stderr=open(os.devnull, 'w')
@@ -113,6 +113,8 @@ def ffmpeg_stream_audio(filename):
         stdin=stdin,
         stdout=subprocess.PIPE)
     prop = json.loads(proc.stdout.read())
+    if 'streams' not in prop:
+        raise RuntimeError('FFmpeg cannot decode audio')
     sample_rate = int(prop['streams'][0]['sample_rate'])
     nchannels = prop['streams'][0]['channels']
     proc = subprocess.Popen(['ffmpeg', '-i', filename,
@@ -163,5 +165,6 @@ def stream_audio(filename):
     try:
         return ffmpeg_stream_audio(filename, is_tmp=is_tmp)
     except:
-        os.unlink(tmpname)
+        if is_tmp:
+            os.unlink(tmpname)
         raise
