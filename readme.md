@@ -73,7 +73,7 @@ python tools/traintestsplit.py --csv lists/air.csv --train lists/air_train.csv -
 ## Train
 
 ```
-python train.py -d --param configs/default.json -w4
+python train.py --param configs/default.json -w4
 ```
 
 ## Generate query

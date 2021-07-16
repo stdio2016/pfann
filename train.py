@@ -49,10 +49,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
         train_data.augmented = True
         train_data.set_epoch(epoch)
 
-        if params['no_train']:
-            pbar = []
-        else:
-            pbar = tqdm(train_data, ncols=80)
+        pbar = tqdm(train_data, ncols=80)
         for x in pbar:
             optimizer.zero_grad()
         
@@ -82,9 +79,8 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             lossnum = float(loss.item())
             pbar.set_description('loss=%f'%lossnum)
             losses.append(lossnum)
-        if not params['no_train']:
-            writer.add_scalar('train/loss', np.mean(losses), epoch)
-            print('loss: %f' % np.mean(losses))
+        writer.add_scalar('train/loss', np.mean(losses), epoch)
+        print('loss: %f' % np.mean(losses))
 
         model.eval()
         with torch.no_grad():
@@ -163,9 +159,6 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
 
 def test_train(args):
     params = simpleutils.read_config(args.params)
-    params['no_train'] = args.no_train
-    if args.workers is not None:
-        params['num_workers'] = args.workers
     torch.manual_seed(123)
     torch.cuda.manual_seed(123)
     torch.backends.cudnn.benchmark = False
@@ -186,34 +179,24 @@ def test_train(args):
     writer.flush()
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
-    if args.data:
-        train_data = SegmentedDataLoader('train', params)
-        print('training data contains %d samples' % len(train_data.dataset))
-    else:
-        data_N = 2000
-        x_mock = make_false_data(data_N, F_bin, T)
-        train_data = DataLoader(x_mock, batch_size=batch_size//2, shuffle=True)
+    
+    train_data = SegmentedDataLoader('train', params, num_workers=args.workers)
+    print('training data contains %d samples' % len(train_data.dataset))
     
     optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4) * batch_size/640)
     
-    if args.data:
-        val_data = SegmentedDataLoader('validate', params)
-        val_data.shuffle = False
-        val_data.eval_time_shift = True
-        print('validation data contains %d samples' % len(val_data.dataset))
-    else:
-        validate_N = 160
-        y_mock = make_false_data(validate_N, F_bin, T)
-        val_data = DataLoader(y_mock, batch_size=40//2)
+    val_data = SegmentedDataLoader('validate', params, num_workers=args.workers)
+    val_data.shuffle = False
+    val_data.eval_time_shift = True
+    print('validation data contains %d samples' % len(val_data.dataset))
+    
     train(model, optimizer, train_data, val_data, batch_size, device, params, writer)
 
 if __name__ == "__main__":
     torch.use_deterministic_algorithms(True)
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
-    args.add_argument('-d', '--data')
     args.add_argument('-p', '--params', default='configs/default.json')
-    args.add_argument('--no-train', action='store_true')
-    args.add_argument('-w', '--workers', type=int)
+    args.add_argument('-w', '--workers', type=int, default=4)
     args = args.parse_args()
     test_train(args)
