@@ -10,6 +10,7 @@ import torchaudio
 import tqdm
 
 from model import FpNetwork
+from datautil.melspec import build_mel_spec_layer
 from datautil.noise import NoiseData
 from datautil.ir import AIR, MicIRP
 from datautil.preprocess import preprocess_music
@@ -97,14 +98,7 @@ class MusicSegmentDataset(Dataset):
         self.offset_right = torch.LongTensor(self.offset_right)
 
         # setup mel spectrogram
-        self.mel = torchaudio.transforms.MelSpectrogram(
-                sample_rate=sample_rate,
-                n_fft=self.params['stft_n'],
-                hop_length=self.params['stft_hop'],
-                f_min=self.params['f_min'],
-                f_max=self.params['f_max'],
-                n_mels=self.params['n_mels'],
-                window_fn=torch.hann_window)
+        self.mel = build_mel_spec_layer(params)
     
     def get_single_segment(self, idx, offset, length):
         cue = int(self.cues[idx]) + offset
@@ -171,7 +165,7 @@ class MusicSegmentDataset(Dataset):
         x = [x_orig, x_aug] if self.augmented else [x_orig]
         x = torch.stack(x, dim=1)
         if self.mel is not None:
-            return torch.log(self.mel(x).clamp(min=1e-8))
+            return self.mel(x)
         return x
     
     def fan_si_le(self):

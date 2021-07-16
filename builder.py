@@ -20,6 +20,7 @@ with warnings.catch_warnings():
 
 import simpleutils
 from model import FpNetwork
+from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
 
 if __name__ == "__main__":
@@ -56,14 +57,7 @@ if __name__ == "__main__":
     dataset = MusicDataset(file_list_for_db, params)
     loader = DataLoader(dataset, num_workers=4)
     
-    mel = torchaudio.transforms.MelSpectrogram(
-        sample_rate=params['sample_rate'],
-        n_fft=params['stft_n'],
-        hop_length=params['stft_hop'],
-        f_min=params['f_min'],
-        f_max=params['f_max'],
-        n_mels=params['n_mels'],
-        window_fn=torch.hann_window).to(device)
+    mel = build_mel_spec_layer(params).to(device)
     
     os.makedirs(dir_for_db, exist_ok=True)
     embeddings_file = open(os.path.join(dir_for_db, 'embeddings'), 'wb')
@@ -82,9 +76,6 @@ if __name__ == "__main__":
                 # torchaudio is still using deprecated function torch.rfft
                 warnings.simplefilter("ignore")
                 g = mel(g)
-            g = torch.log(g + 1e-12)
-            if params.get('spec_norm', 'l2') == 'max':
-                g -= torch.amax(g, dim=(1,2)).reshape(-1, 1, 1)
             z = model(g).cpu()
             for _ in z:
                 lbl.append(i)
