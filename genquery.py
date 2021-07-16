@@ -115,10 +115,6 @@ if __name__ == '__main__':
     # don't delete this line, because my data loader uses queues
     torch.multiprocessing.set_start_method('spawn')
     args = argparse.ArgumentParser()
-    args.add_argument('-d', '--data', required=True)
-    args.add_argument('--noise')
-    args.add_argument('--air')
-    args.add_argument('--micirp')
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('-l', '--length', type=float, default=1)
     args.add_argument('--num', type=int, default=10)
@@ -144,32 +140,23 @@ if __name__ == '__main__':
         fftconv_n *= 2
     params['fftconv_n'] = fftconv_n
     
-    if args.noise:
-        noise = NoiseData(noise_dir=args.noise,
+    noise = NoiseData(noise_dir=params['noise']['dir'],
             list_csv=params['noise'][train_val],
             sample_rate=sample_rate, cache_dir=params['cache_dir'])
-    else:
-        noise = None
     
-    if args.air:
-        air = AIR(air_dir=args.air,
+    air = AIR(air_dir=params['air']['dir'],
             list_csv=params['air'][train_val],
             length=params['air']['length'],
             fftconv_n=params['fftconv_n'], sample_rate=sample_rate)
-    else:
-        air = None
     
-    if args.micirp:
-        micirp = MicIRP(mic_dir=args.micirp,
+    micirp = MicIRP(mic_dir=params['micirp']['dir'],
             list_csv=params['micirp'][train_val],
             length=params['micirp']['length'],
             fftconv_n=params['fftconv_n'], sample_rate=sample_rate)
-    else:
-        micirp = None
     
     music_list = simpleutils.read_file_list(params[train_val_test + '_csv'])
     
-    gen = QueryGen(args.data, music_list, noise, air, micirp, args.length, args.num, params)
+    gen = QueryGen(params['music_dir'], music_list, noise, air, micirp, args.length, args.num, params)
     runall = torch.utils.data.DataLoader(
         dataset=gen,
         num_workers=3,

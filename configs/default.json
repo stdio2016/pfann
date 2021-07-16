@@ -2,6 +2,7 @@
   "train_csv": "lists/fma_medium_train.csv",
   "validate_csv": "lists/fma_medium_val.csv",
   "test_csv": "lists/test.csv",
+  "music_dir": "../pfann_dataset/fma_medium",
   "model_dir": "baseline_model",
   "cache_dir": "caches",
   "batch_size": 640,
@@ -22,17 +23,20 @@
   "noise": {
     "train": "lists/noise_train.csv",
     "validate": "lists/noise_val.csv",
+    "dir": "../pfann_dataset/audioset",
     "snr_max": 10,
     "snr_min": 0
   },
   "micirp": {
     "train": "lists/micirp_train.csv",
     "validate": "lists/micirp_val.csv",
+    "dir": "../pfann_dataset/micirp",
     "length": 0.5
   },
   "air": {
     "train": "lists/air_train.csv",
     "validate": "lists/air_val.csv",
+    "dir": "../pfann_dataset/AIR_1_4",
     "length": 1
   },
   "cutout_min": 0.1,
