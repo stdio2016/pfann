@@ -1,7 +1,7 @@
 {
   "train_csv": "lists/fma_medium_train.csv",
   "validate_csv": "lists/fma_medium_val.csv",
-  "test_csv": "lists/test.csv",
+  "test_csv": "lists/fma_medium_test.csv",
   "music_dir": "../pfann_dataset/fma_medium",
   "model_dir": "baseline_model",
   "cache_dir": "caches",
