@@ -33,7 +33,13 @@ if __name__ == "__main__":
     configs = 'configs/default.json'
     if len(sys.argv) >= 4:
         configs = sys.argv[3]
-    params = simpleutils.read_config(configs)
+    if os.path.isdir(configs):
+        configs_path = os.path.join(configs, 'configs.json')
+        params = simpleutils.read_config(configs_path)
+        params['model_dir'] = configs
+        configs = configs_path
+    else:
+        params = simpleutils.read_config(configs)
 
     d = params['model']['d']
     h = params['model']['h']
