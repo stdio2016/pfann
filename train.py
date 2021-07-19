@@ -35,11 +35,12 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
+    total_epoch = params.get('epoch', 100)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
-            T_0=100, eta_min=1e-7)
+            T_0=total_epoch, eta_min=1e-7, last_epoch=start_epoch)
     os.makedirs(params['model_dir'], exist_ok=True)
     specaug = SpecAugment(params)
-    for epoch in range(start_epoch+1, params.get('epoch', 100)):
+    for epoch in range(start_epoch+1, total_epoch):
         model.train()
         tau = params.get('tau', 0.05)
         print('epoch %d' % (epoch+1))
@@ -174,11 +175,24 @@ def test_train(args):
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T, params['model']).to(device)
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4) * batch_size/640)
+    optimizer = params.get('optimizer', 'adam')
+    if optimizer == 'lamb':
+        optimizer = optim.Lamb(model.parameters(), lr=params.get('lr', 1e-4),
+            weight_decay=1e-6, clamp_value=1e3, debias=True)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4))
     
     # load checkpoint
     os.makedirs(params['model_dir'], exist_ok=True)
     epoch = -1
+    if os.path.exists(os.path.join(params['model_dir'], 'date.txt')):
+        with open(os.path.join(params['model_dir'], 'date.txt')) as fin:
+            date_str = next(fin).strip()
+    else:
+        date_str = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        with open(os.path.join(params['model_dir'], 'date.txt'), 'w') as fout:
+            fout.write(date_str + '\n')
+    
     if os.path.exists(os.path.join(params['model_dir'], 'epochs.txt')):
         with open(os.path.join(params['model_dir'], 'epochs.txt')) as fin:
             epoch = int(fin.read().strip())
@@ -196,7 +210,7 @@ def test_train(args):
     safe_name = os.path.split(params['model_dir'])[1]
     if safe_name == '':
         safe_name = os.path.split(os.path.split(params['model_dir'])[0])[1]
-    log_dir = "runs/" + safe_name
+    log_dir = "runs/" + safe_name + '-' + date_str
     writer = tensorboardX.SummaryWriter(log_dir)
     
     if torch.cuda.is_available():
