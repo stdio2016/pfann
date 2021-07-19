@@ -12,50 +12,64 @@ def get_activation(name):
     raise KeyError(name)
 
 class SeparableConv2d(Module):
-    def __init__(self, i, o, k, s, in_F, in_T, fuller=False, activation='ReLU'):
+    def __init__(self, i, o, k, s, in_F, in_T, fuller=False, activation='ReLU', relu_after_bn=True):
         super(SeparableConv2d, self).__init__()
         # this is actually "same" padding, but PyTorch doesn't support that
-        padding = (in_T-1)//s * s + k - in_T
+        padding = (in_T-1)//s[0] * s[0] + k - in_T
         self.pad1 = ZeroPad2d((padding//2, padding - padding//2, 0, 0))
-        self.conv1 = Conv2d(i, o, kernel_size=(1, k), stride=(1, s))
-        self.ln1 = LayerNorm((o, in_F, (in_T-1)//s+1))
+        self.conv1 = Conv2d(i, o, kernel_size=(1, k), stride=(1, s[0]))
+        self.ln1 = LayerNorm((o, in_F, (in_T-1)//s[0]+1))
         self.relu1 = get_activation(activation)
         # this is actually "same" padding, but PyTorch doesn't support that
-        padding = (in_F-1)//s * s + k - in_F
+        padding = (in_F-1)//s[1] * s[1] + k - in_F
         self.pad2 = ZeroPad2d((0, 0, padding//2, padding - padding//2))
         if fuller:
-            self.conv2 = Conv2d(o, o, kernel_size=(k, 1), stride=(s, 1))
+            self.conv2 = Conv2d(o, o, kernel_size=(k, 1), stride=(s[1], 1))
         else:
-            self.conv2 = Conv2d(o, o, kernel_size=(k, 1), stride=(s, 1), groups=o)
-        self.ln2 = LayerNorm((o, (in_F-1)//s+1, (in_T-1)//s+1))
+            self.conv2 = Conv2d(o, o, kernel_size=(k, 1), stride=(s[1], 1), groups=o)
+        self.ln2 = LayerNorm((o, (in_F-1)//s[1]+1, (in_T-1)//s[0]+1))
         self.relu2 = get_activation(activation)
+        
+        self.relu_after_bn = relu_after_bn
     
     def forward(self, x):
         x = self.pad1(x)
         x = self.conv1(x)
-        x = self.ln1(x)
-        x = self.relu1(x)
+        if self.relu_after_bn:
+            x = self.ln1(x)
+            x = self.relu1(x)
+        else:
+            x = self.relu1(x)
+            x = self.ln1(x)
         x = self.pad2(x)
         x = self.conv2(x)
-        x = self.ln2(x)
-        x = self.relu2(x)
+        if self.relu_after_bn:
+            x = self.ln2(x)
+            x = self.relu2(x)
+        else:
+            x = self.relu2(x)
+            x = self.ln2(x)
         return x
 
 class MyF(Module):
-    def __init__(self, d, h, u, in_F, in_T, fuller=False, activation='ReLU'):
+    def __init__(self, d, h, u, in_F, in_T, fuller=False, activation='ReLU',
+            strides=None, relu_after_bn=True):
         super(MyF, self).__init__()
         channels = [1, d, d, 2*d, 2*d, 4*d, 4*d, h, h]
         convs = []
         for i in range(8):
             k = 3
-            s = 2
+            s = 2, 2
+            if strides is not None:
+                s = strides[i][0][1], strides[i][1][0]
             sepconv = SeparableConv2d(channels[i], channels[i+1], k, s, in_F, in_T,
                 fuller=fuller,
-                activation=activation
+                activation=activation,
+                relu_after_bn=relu_after_bn
             )
             convs.append(sepconv)
-            in_F = (in_F-1)//s + 1
-            in_T = (in_T-1)//s + 1
+            in_F = (in_F-1)//s[1] + 1
+            in_T = (in_T-1)//s[0] + 1
         assert in_F==in_T==1, 'output must be 1x1'
         self.convs = ModuleList(convs)
     
@@ -95,7 +109,9 @@ class FpNetwork(Module):
         super(FpNetwork, self).__init__()
         self.f = MyF(d, h, u, F, T,
             fuller=params.get('fuller', False),
-            activation=params.get('conv_activation', 'ReLU')
+            activation=params.get('conv_activation', 'ReLU'),
+            strides=params.get('strides'),
+            relu_after_bn=params.get('relu_after_bn', True)
         )
         self.g = MyG(d, h, u)
     
