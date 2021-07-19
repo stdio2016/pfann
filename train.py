@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import shutil
 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 
 import numpy as np
@@ -30,7 +31,7 @@ def similarity_loss(y, tau):
     loss = torch.sum(Ls) / -y.shape[0]
     return loss
 
-def train(model, optimizer, train_data, val_data, batch_size, device, params, writer):
+def train(model, optimizer, train_data, val_data, batch_size, device, params, writer, start_epoch):
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
@@ -38,7 +39,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             T_0=100, eta_min=1e-7)
     os.makedirs(params['model_dir'], exist_ok=True)
     specaug = SpecAugment(params)
-    for epoch in range(params.get('epoch', 100)):
+    for epoch in range(start_epoch+1, params.get('epoch', 100)):
         model.train()
         tau = params.get('tau', 0.05)
         print('epoch %d' % (epoch+1))
@@ -172,25 +173,44 @@ def test_train(args):
     batch_size = params['batch_size']
     device = torch.device('cuda')
     model = FpNetwork(d, h, u, F_bin, T, params['model']).to(device)
-
-    log_dir = "runs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4) * batch_size/640)
+    
+    # load checkpoint
+    os.makedirs(params['model_dir'], exist_ok=True)
+    epoch = -1
+    if os.path.exists(os.path.join(params['model_dir'], 'epochs.txt')):
+        with open(os.path.join(params['model_dir'], 'epochs.txt')) as fin:
+            epoch = int(fin.read().strip())
+        if epoch+1 >= params.get('epoch', 100):
+            print('This model has finished training!')
+            exit(1)
+        print('Load from epoch %d' % (epoch+1))
+        check = torch.load(os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch))
+        model.load_state_dict(check['model'])
+        optimizer.load_state_dict(check['optimizer'])
+    else:
+        shutil.copyfile(args.params, os.path.join(params['model_dir'], 'configs.json'))
+    
+    # tensorboard visualize
+    safe_name = os.path.split(params['model_dir'])[1]
+    if safe_name == '':
+        safe_name = os.path.split(os.path.split(params['model_dir'])[0])[1]
+    log_dir = "runs/" + safe_name
     writer = tensorboardX.SummaryWriter(log_dir)
-    writer.add_graph(model, torch.zeros([1, F_bin, T]).to(device))
-    writer.flush()
+    
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
     
     train_data = SegmentedDataLoader('train', params, num_workers=args.workers)
     print('training data contains %d samples' % len(train_data.dataset))
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4) * batch_size/640)
-    
     val_data = SegmentedDataLoader('validate', params, num_workers=args.workers)
     val_data.shuffle = False
     val_data.eval_time_shift = True
     print('validation data contains %d samples' % len(val_data.dataset))
     
-    train(model, optimizer, train_data, val_data, batch_size, device, params, writer)
+    train(model, optimizer, train_data, val_data, batch_size, device, params, writer, epoch)
 
 if __name__ == "__main__":
     torch.use_deterministic_algorithms(True)
