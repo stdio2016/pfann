@@ -156,11 +156,6 @@ class MusicSegmentDataset(Dataset):
             x_aug = torch.fft.irfft(spec, self.fftconv_n)
             x_aug = x_aug[..., self.pad_start:segment_size]
         
-        # normalize volume
-        x_orig = torch.nn.functional.normalize(x_orig, p=2, dim=1)
-        if self.augmented:
-            x_aug = torch.nn.functional.normalize(x_aug, p=2, dim=1)
-        
         # output [x1_orig, x1_aug, x2_orig, x2_aug, ...]
         x = [x_orig, x_aug] if self.augmented else [x_orig]
         x = torch.stack(x, dim=1)

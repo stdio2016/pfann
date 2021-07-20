@@ -31,6 +31,10 @@ class MelSpec(torch.nn.Module):
         )
 
     def forward(self, x):
+        # normalize volume
+        p = 1e999 if self.spec_norm == 'max' else 2
+        x = torch.nn.functional.normalize(x, p=p, dim=1)
+
         if self.naf_mode:
             x = self.mel(x) + 0.06
         else:

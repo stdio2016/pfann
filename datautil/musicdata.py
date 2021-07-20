@@ -55,10 +55,9 @@ class MusicDataset(torch.utils.data.Dataset):
             # this "music" is too short and need to be extended
             wav = F.pad(wav, (0, self.segment_size - wav.shape[0]))
         
-        # normalize volume
+        # slice overlapping segments
         wav = wav.unfold(0, self.segment_size, self.hop_size//self.frame_shift_mul)
         wav = wav - wav.mean(dim=1).unsqueeze(1)
-        wav = F.normalize(wav, p=2, dim=1)
         
         return index, self.files[index], wav
     
