@@ -49,6 +49,7 @@ class NoiseData:
             smp = smp[max(start, 0) : end]
             
             resampled = torchaudio.transforms.Resample(smprate, sample_rate)(smp)
+            resampled = torch.nn.functional.normalize(resampled, dim=0, p=1e999)
             data.append(resampled)
             self.names.append(name)
         self.data = torch.cat(data)
@@ -78,27 +79,17 @@ class NoiseData:
             fout.write(hash)
         print('save to cache')
         audio.numpy().tofile(loc)
-    
+
     def random_choose(self, num, duration, out_name=False):
-        indices = torch.randint(0, len(self.names), size=(num,), dtype=torch.long)
+        indices = torch.randint(0, self.data.shape[0] - duration, size=(num,), dtype=torch.long)
         out = torch.zeros([num, duration], dtype=torch.float32)
         for i in range(num):
-            idx = indices[i].item()
-            start = int(self.boundary[idx])
-            end = int(self.boundary[idx+1])
-            du = end - start
-            if du >= duration:
-                # select random segment
-                start = start + torch.randint(0, du - duration + 1, size=(1,)).item()
-                end = start + duration
-                out[i] = self.data[start:end]
-            else:
-                # put entire noise file at center
-                p_start = (duration - du)//2
-                p_end = p_start + du
-                out[i, p_start:p_end] = self.data[start:end]
+            start = int(indices[i])
+            end = start + duration
+            out[i] = self.data[start:end]
+        name_lookup = torch.searchsorted(self.boundary, indices, right=True) - 1
         if out_name:
-            return out, [self.names[x] for x in indices]
+            return out, [self.names[x] for x in name_lookup]
         return out
 
     # x is a 2d array
