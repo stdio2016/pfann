@@ -18,6 +18,24 @@ from datautil.mock_data import make_false_data
 import simpleutils
 from datautil.specaug import SpecAugment
 
+# fix PyTorch bug #49630
+# apply pull request #49631
+CosineAnnealingWarmRestarts = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+def new_cosinedecay_init(self, optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, verbose=False):
+        if T_0 <= 0 or not isinstance(T_0, int):
+            raise ValueError("Expected positive integer T_0, but got {}".format(T_0))
+        if T_mult < 1 or not isinstance(T_mult, int):
+            raise ValueError("Expected integer T_mult >= 1, but got {}".format(T_mult))
+        self.T_0 = T_0
+        self.T_i = T_0
+        self.T_mult = T_mult
+        self.eta_min = eta_min
+
+        self.T_cur = 0 if last_epoch < 0 else last_epoch
+        super(CosineAnnealingWarmRestarts, self).__init__(optimizer, last_epoch, verbose)
+
+torch.optim.lr_scheduler.CosineAnnealingWarmRestarts.__init__ = new_cosinedecay_init
+
 def similarity_loss(y, tau):
     a = torch.matmul(y, y.T)
     a /= tau
