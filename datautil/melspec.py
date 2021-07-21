@@ -33,7 +33,7 @@ class MelSpec(torch.nn.Module):
     def forward(self, x):
         # normalize volume
         p = 1e999 if self.spec_norm == 'max' else 2
-        x = torch.nn.functional.normalize(x, p=p, dim=1)
+        x = torch.nn.functional.normalize(x, p=p, dim=-1)
 
         if self.naf_mode:
             x = self.mel(x) + 0.06
@@ -46,7 +46,7 @@ class MelSpec(torch.nn.Module):
             x = torch.log(x)
         
         if self.spec_norm == 'max':
-            x = x - torch.amax(x, dim=(1,2), keepdim=True)
+            x = x - torch.amax(x, dim=(-2,-1), keepdim=True)
         return x
 
 def build_mel_spec_layer(params):
