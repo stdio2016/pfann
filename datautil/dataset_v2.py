@@ -311,7 +311,7 @@ if __name__ == '__main__':
     loader = SegmentedDataLoader('validate', params)
     loader.shuffle = True
     loader.eval_time_shift = False
-    loader.augmented = False
+    loader.augmented = True
     loader.dataset.mel = None
     i = 0
     for epoch in range(2):
@@ -319,8 +319,9 @@ if __name__ == '__main__':
         for x in tqdm.tqdm(loader):
             i += 1
             if i == 1:
-                wavs = x.permute(1, 0, 2).flatten(1, 2)
-                wavs /= max(wavs.abs().max(), 1e-4)
+                wavs = x.permute(1, 0, 2)
+                wavs = torch.nn.functional.normalize(wavs, dim=-1, p=1e999)
+                wavs = wavs.flatten(1, 2)
                 torchaudio.save('trylisten.wav', wavs[:,:8000*30], 8000)
             torch.set_num_threads(1)
             #x = x.cuda()
