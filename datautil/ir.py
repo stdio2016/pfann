@@ -80,6 +80,10 @@ if __name__ == '__main__':
     with open(args.out, 'w', encoding='utf8', newline='\n') as fout:
         writer = csv.writer(fout)
         writer.writerow(['file'])
+        files = []
         for name in os.listdir(args.air):
             if name.endswith('.mat'):
-                writer.writerow([name])
+                files.append(name)
+        files.sort()
+        for name in files:
+            writer.writerow([name])
