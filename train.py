@@ -18,6 +18,8 @@ from datautil.mock_data import make_false_data
 import simpleutils
 from datautil.specaug import SpecAugment
 
+from torch.cuda.amp import autocast, GradScaler
+
 # fix PyTorch bug #49630
 # apply pull request #49631
 CosineAnnealingWarmRestarts = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
@@ -56,6 +58,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     total_epoch = params.get('epoch', 100)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
             T_0=total_epoch, eta_min=1e-7, last_epoch=start_epoch)
+    scaler = GradScaler()
     os.makedirs(params['model_dir'], exist_ok=True)
     specaug = SpecAugment(params)
     for epoch in range(start_epoch+1, total_epoch):
@@ -92,10 +95,12 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
                     yy = model(xx.to(device))
                     yy.backward(yg.to(device))
             else:
-                y = model(x.to(device))
-                loss = similarity_loss(y, tau)
-                loss.backward()
-            optimizer.step()
+                with autocast():
+                    y = model(x.to(device))
+                    loss = similarity_loss(y, tau)
+                scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             lossnum = float(loss.item())
             pbar.set_description('loss=%f'%lossnum)
             losses.append(lossnum)
