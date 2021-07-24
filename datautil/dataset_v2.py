@@ -81,7 +81,7 @@ class MusicSegmentDataset(Dataset):
         self.song_range = [] # range of song i is (start time, end time, start idx, end idx)
         t = 0
         for duration in song_len:
-            num_segs = round((duration - self.segment_size + self.hop_size) / self.hop_size)
+            num_segs = (duration - self.segment_size + self.hop_size) // self.hop_size
             start_cue = len(self.cues)
             for idx in range(num_segs):
                 my_time = idx * self.hop_size
