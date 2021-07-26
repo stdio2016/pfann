@@ -51,14 +51,13 @@ def similarity_loss(y, tau):
     loss = torch.sum(Ls) / -y.shape[0]
     return loss
 
-def train(model, optimizer, train_data, val_data, batch_size, device, params, writer, start_epoch):
+def train(model, optimizer, train_data, val_data, batch_size, device, params, writer, start_epoch, scaler):
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
     total_epoch = params.get('epoch', 100)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
             T_0=total_epoch, eta_min=1e-7, last_epoch=start_epoch)
-    scaler = GradScaler()
     os.makedirs(params['model_dir'], exist_ok=True)
     specaug = SpecAugment(params)
     for epoch in range(start_epoch+1, total_epoch):
@@ -169,6 +168,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
             'epoch': epoch,
             'model': model.state_dict(),
             'optimizer': optimizer.state_dict(),
+            'scaler': scaler.state_dict(),
         }
         torch.save(check, os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch))
         # cleanup old checkpoints
@@ -204,6 +204,7 @@ def test_train(args):
             weight_decay=1e-6, clamp_value=1e3, debias=True)
     else:
         optimizer = torch.optim.Adam(model.parameters(), lr=params.get('lr', 1e-4))
+    scaler = GradScaler()
     
     # load checkpoint
     os.makedirs(params['model_dir'], exist_ok=True)
@@ -226,6 +227,8 @@ def test_train(args):
         check = torch.load(os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch))
         model.load_state_dict(check['model'])
         optimizer.load_state_dict(check['optimizer'])
+        if 'scaler' in check:
+            scaler.load_state_dict(check['scaler'])
     else:
         shutil.copyfile(args.params, os.path.join(params['model_dir'], 'configs.json'))
     
@@ -247,7 +250,7 @@ def test_train(args):
     val_data.eval_time_shift = True
     print('validation data contains %d samples' % len(val_data.dataset))
     
-    train(model, optimizer, train_data, val_data, batch_size, device, params, writer, epoch)
+    train(model, optimizer, train_data, val_data, batch_size, device, params, writer, epoch, scaler)
 
 if __name__ == "__main__":
     torch.use_deterministic_algorithms(True)
