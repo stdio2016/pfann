@@ -15,6 +15,8 @@ python tools/listaudio.py --folder ../pfann_dataset/fma_medium --out lists/fma_m
 python tools/filterduration.py --csv lists/fma_medium.csv --min-len 29.9 --out lists/fma_medium_30s.csv
 python tools/traintestsplit.py --csv lists/fma_medium_30s.csv --train lists/fma_medium_train.csv --train-size 10000 --test lists/fma_medium_valtest.csv --test-size 1000
 python tools/traintestsplit.py --csv lists/fma_medium_valtest.csv --train lists/fma_medium_val.csv --train-size 500 --test lists/fma_medium_test.csv --test-size 500
+python tools/traintestsplit.py --csv lists/fma_medium_train.csv --train-size 2000 --train lists/fma_inside_test.csv
+rm test.csv
 ```
 
 ### AudioSet
@@ -77,16 +79,16 @@ python train.py --param configs/default.json -w4
 ```
 
 ## Generate query
+Inside test:
 ```
-python genquery.py --num 2000 --out /path/to/query6s/ --len 6
+python genquery.py --num 2000 --out /path/to/query6s/ --len 6 --configs configs/gentest.json --mode train
 ```
 
 ## Builder
+Inside test:
 ```
 python tools/csv2txt.py --dir ../pfann_dataset/fma_medium lists/fma_medium_train.csv --out lists/fma_medium_train.txt
-python tools/csv2txt.py --dir ../pfann_dataset/fma_medium lists/fma_medium_test.csv --out lists/fma_medium_test.txt
-cat lists/fma_medium_train.txt lists/fma_medium_test.txt > lists/build_fma_medium.txt
-python builder.py lists/build_fma_medium.txt /path/to/db configs/default.json
+python builder.py lists/fma_medium_train.txt /path/to/db configs/default.json
 ```
 
 Usage of `builder.py`:
