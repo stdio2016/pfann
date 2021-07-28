@@ -17,11 +17,19 @@ lists/*
 
 # model files
 *.pt
+out/models
 
 # database files
 db/
+out/dbs
 fastdb
 slowdb
+
+# generated queries
+out/queries
+
+# matcher results
+out/results
 
 # visualize
 *.wav.png

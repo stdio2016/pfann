@@ -17,7 +17,7 @@
     "validate": "lists/noise_val.csv",
     "dir": "../pfann_dataset/audioset",
     "snr_max": 4,
-    "snr_min": -4
+    "snr_min": 4
   },
   "micirp": {
     "train": "lists/micirp_train.csv",
