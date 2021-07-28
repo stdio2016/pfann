@@ -81,7 +81,7 @@ python train.py --param configs/default.json -w4
 ## Generate query
 Inside test:
 ```
-python genquery.py --num 2000 --out /path/to/query6s/ --len 6 --configs configs/gentest.json --mode train
+python genquery.py --params configs/gentest.json --len 10 --num 2000 --mode train --out out/queries/inside_test_10s
 ```
 
 ## Builder

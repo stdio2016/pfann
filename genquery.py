@@ -1,5 +1,6 @@
 import argparse
 import csv
+import math
 import os
 import warnings
 import json
@@ -70,27 +71,13 @@ class QueryGen(torch.utils.data.Dataset):
             audio = F.pad(audio, (0, sel_smp+pad_smp-audio.shape[0]))
         
         # background mixing
-        audio -= audio.mean()
-        # our model cannot hear <300Hz sound
-        if self.params['noise'].get('snr_only_in_f_range', False):
-            audio_hi = torchaudio.functional.bass_biquad(audio, self.sample_rate, -24, self.params['f_min'])
-            amp = torch.sqrt((audio_hi**2).mean())
-        else:
-            amp = torch.sqrt((audio**2).mean())
         snr_max = self.params['noise']['snr_max']
         snr_min = self.params['noise']['snr_min']
-        snr = snr_min + torch.rand(1) * (snr_max - snr_min)
         if self.noise:
-            noise = self.noise.random_choose(1, audio.shape[0])[0]
-            # our model cannot hear <300Hz sound
-            if self.params['noise'].get('snr_only_in_f_range', False):
-                noise_hi = torchaudio.functional.bass_biquad(noise, self.sample_rate, -24, self.params['f_min'])
-                noise_amp = torch.sqrt((noise_hi**2).mean())
-            else:
-                noise_amp = torch.sqrt((noise**2).mean())
-            audio += noise * (amp / noise_amp * torch.pow(10, -0.05*snr))
-        else:
-            audio = torch.normal(mean=audio, std=(amp*torch.pow(10, -0.05*snr)))
+            audio, noise, snr = self.noise.add_noises(audio.unsqueeze(0), snr_min, snr_max, out_name=True)
+            audio = audio[0]
+            noise = noise[0]
+            snr = snr.item()
         
         # IR filters
         audio_freq = torch.fft.rfft(audio, self.params['fftconv_n'])
@@ -106,7 +93,7 @@ class QueryGen(torch.utils.data.Dataset):
         # normalize volume
         audio = F.normalize(audio, p=np.inf, dim=0)
         
-        return name, time_offset/smprate, audio, snr.item(), reverb
+        return name, time_offset/smprate, audio, snr, reverb
     
     def __len__(self):
         return self.num_queries
@@ -169,7 +156,7 @@ if __name__ == '__main__':
     writer.writerow(['query', 'answer', 'time', 'snr', 'reverb'])
     for i, (name,time_offset,sound,snr,reverb) in enumerate(tqdm.tqdm(runall)):
         safe_name = os.path.splitext(os.path.split(name)[1])[0]
-        out_name = 'q%04d_%s_snr%d_%s.wav' % (i+1, safe_name, round(snr), reverb)
+        out_name = 'q%04d_%s_snr%d_%s.wav' % (i+1, safe_name, math.floor(snr), reverb)
         writer.writerow([out_name, name, time_offset, snr, reverb])
         path = os.path.join(args.out, out_name)
         torchaudio.save(path, sound.unsqueeze(0), gen.sample_rate, encoding='PCM_S', bits_per_sample=16)
