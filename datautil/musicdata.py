@@ -33,23 +33,33 @@ class MusicDataset(torch.utils.data.Dataset):
         wav = []
         for b in stm.stream:
             b = np.array(b).reshape([-1, stm.nchannels])
-            b = np.mean(b, axis=1, dtype=np.float32) * (1/32768)
+            b = np.multiply(b, 1/32768, dtype=np.float32)
             arr.append(b)
             n += b.shape[0]
             total += b.shape[0]
             if n >= minute:
                 arr = np.concatenate(arr)
                 b = arr[:minute]
-                out = torch.from_numpy(b)
-                wav.append(resampler(out)[strip_head : new_min-new_sec//2])
+                out = torch.from_numpy(b.T)
+                wav.append(resampler(out)[:, strip_head : new_min-new_sec//2])
                 arr = [arr[minute-second:].copy()]
                 strip_head = new_sec//2
                 n -= minute-second
         # resample tail part
         arr = np.concatenate(arr)
-        out = torch.from_numpy(arr)
-        wav.append(resampler(out)[strip_head : ])
-        wav = torch.cat(wav)
+        out = torch.from_numpy(arr.T)
+        wav.append(resampler(out)[:, strip_head : ])
+        wav = torch.cat(wav, dim=1)
+        
+        # stereo to mono
+        # check if it is fake stereo
+        if wav.shape[0] == 2:
+            pow1 = ((wav[0] - wav[1])**2).mean()
+            pow2 = ((wav[0] + wav[1])**2).mean()
+            if pow1 > pow2 * 1000:
+                print('fake stereo with opposite phase detected: %s' % self.files[index])
+                wav[1] *= -1
+        wav = wav.mean(dim=0)
 
         if wav.shape[0] < self.segment_size:
             # this "music" is too short and need to be extended
