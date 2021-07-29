@@ -21,24 +21,24 @@ matcher() {
   if [ $2 == mirex ]; then
     python matcher.py lists/mirex-query.txt out/dbs/$1_$2 out/results/$1_$2.txt
   else
-    python matcher.py out/queries/$2_test/list.txt out/dbs/$1_$2 out/results/$1_$2.txt
+    python matcher.py out/queries/$2/list.txt out/dbs/$1_$2 out/results/$1_$2.txt
   fi
 }
 matcher_snr() {
   # model dataset snr
-  python matcher.py out/queries/$2_test_snr$3/list.txt out/dbs/$1_$2 out/results/$1_$2_snr$3.txt
+  python matcher.py out/queries/$2_snr$3/list.txt out/dbs/$1_$2 out/results/$1_$2_snr$3.txt
 }
 accuracy() {
   # model dataset
   if [ $2 == mirex ]; then
     python tools/accuracy.py lists/mirex-answer.txt out/results/$1_$2.txt
   else
-    python tools/accuracy.py out/queries/$2_test/expected.csv out/results/$1_$2_detail.csv
+    python tools/accuracy.py out/queries/$2/expected.csv out/results/$1_$2_detail.csv
   fi
 }
 accuracy_snr() {
   echo snr=$3
-  python tools/accuracy.py out/queries/$2_test_snr$3/expected.csv out/results/$1_$2_snr$3_detail.csv
+  python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_snr$3_detail.csv
 }
 forall_snr() {
   # some_command model dataset
@@ -47,6 +47,23 @@ forall_snr() {
     $1 $2 $3 $snr
   done
 }
-builder baseline_model_twcc inside
-forall_snr matcher_snr baseline_model_twcc inside
-forall_snr accuracy_snr baseline_model_twcc inside
+model="$1"
+dataset="$2"
+shift 2
+while [[ $# -gt 0 ]]
+do
+  action="$1"
+  shift
+  case "$action" in
+    "-build" )
+      builder $model $dataset || exit 1;;
+    "-match_snr" )
+      forall_snr matcher_snr $model $dataset || exit 1;;
+    "-accuracy_snr" )
+      forall_snr accuracy_snr $model $dataset || exit 1;;
+    "-match" )
+      matcher $model $dataset || exit 1;;
+    "-accuracy" )
+      accuracy $model $dataset || exit 1;;
+  esac
+done

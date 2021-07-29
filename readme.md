@@ -81,7 +81,7 @@ python train.py --param configs/default.json -w4
 ## Generate query
 Inside test:
 ```
-python genquery.py --params configs/gentest.json --len 10 --num 2000 --mode train --out out/queries/inside_test_10s
+python genquery.py --params configs/gentest.json --len 10 --num 2000 --mode train --out out/queries/inside
 ```
 
 ## Builder
@@ -104,7 +104,7 @@ Will output `result.txt`, `result.bin`, and `result_detail.csv` files.
 
 Usage of `matcher.py`:
 ```
-python builder.py <query list> <db location> <output result file>
+python matcher.py <query list> <db location> <output result file>
 ```
 
 ## Evaluation
