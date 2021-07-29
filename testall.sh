@@ -31,7 +31,7 @@ matcher_snr() {
 accuracy() {
   # model dataset
   if [ $2 == mirex ]; then
-    python tools/accuracy.py lists/mirex-answer.txt out/results/$1_$2.txt
+    python tools/mirexacc.py lists/mirex-answer.txt out/results/$1_$2.txt
   else
     python tools/accuracy.py out/queries/$2/expected.csv out/results/$1_$2_detail.csv
   fi
