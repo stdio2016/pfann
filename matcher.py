@@ -25,6 +25,49 @@ from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
 
+def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
+    '''論文進度 24%'''
+    d = index.d
+    distances, labels = index_gpu.search(query, k)
+    best = -1e999
+    best_song_t = -1, 0
+    song_score = np.zeros(song_pos.shape[0] - 1, dtype=np.float32)
+    
+    for shift in range(frame_shift_mul):
+        candidates = []
+        subquery = query[shift::frame_shift_mul]
+        sub_len = subquery.shape[0]
+        for t in range(sub_len):
+            lab = labels[t * frame_shift_mul + shift]
+            lab = lab[lab != -1]
+            song_id = np.searchsorted(song_pos, lab, side='right') - 1
+            song_t = lab - song_pos[song_id] - t
+            candidates.append(np.stack([song_id, song_t], axis=1))
+        # according to NumPy, np.unique returns sorted array
+        candidates = np.unique(np.concatenate(candidates), axis=0)
+        
+        vec = np.zeros_like(subquery)
+        for c in candidates:
+            song_id = c[0].item()
+            song_start = song_pos[song_id].item()
+            song_len = song_pos[song_id+1].item() - song_start
+            t = c[1].item()
+            
+            # get corresponding embeddings from db
+            for i in range(sub_len):
+                if t+i < 0 or t+i >= song_len:
+                    vec[i] = 0.0
+                else:
+                    index_cpu.reconstruct(song_start + t+i, vec[i])
+            # compute average score
+            sco = np.dot(vec.flatten(), subquery.flatten()).item() / sub_len
+            if sco > song_score[song_id]:
+                song_score[song_id] = sco
+            if sco > best:
+                best = sco
+                best_song_t = song_id, t * frame_shift_mul + shift
+    return best, best_song_t, song_score
+
 if __name__ == "__main__":
     mp.set_start_method('spawn')
     if len(sys.argv) < 4:
@@ -117,84 +160,8 @@ if __name__ == "__main__":
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
-        song_score = np.zeros(len(songList), dtype=np.float32)
-        if top_k == -1:
-            # optimize for exhaustive search
-            arr = faiss.vector_to_array(index.xb).reshape([index.ntotal, d])
-            dists = embeddings.numpy() @ arr.T
-            query_len = embeddings.shape[0]
-            scoreboard = np.zeros(index.ntotal + len(songList) * query_len)
-            shift = index2song * query_len + np.arange(index.ntotal)
-            for t in range(query_len):
-                scoreboard[shift + (query_len - t)] += dists[t]
-            t1_s = np.argmax(scoreboard)
-            sco = scoreboard[t1_s]
-            t1 = np.searchsorted(shift, t1_s, side='right') - 1
-            ans = index2song[t1]
-            t0 = landmarkKey[ans]
-            t0_s = shift[t0]
-            tim = t1_s - t0_s - query_len
-            upsco = []
-            for t in range(query_len):
-                t2 = t0 + tim + t
-                if t0 <= t2 < int(landmarkKey[ans+1]):
-                    upsco.append(float(dists[t, t2]))
-            for songId in range(len(songList)):
-                lo = landmarkKey[songId] + songId * query_len
-                hi = landmarkKey[songId+1] + (songId+1) * query_len
-                song_score[songId] = np.max(scoreboard[lo:hi])
-        else:
-            dists, ids = index.search(x=embeddings.numpy(), k=top_k)
-            scoreboard = {}
-            upcount = {}
-            for t in range(ids.shape[0]):
-                if np.all(dists[t] <= 2):
-                    last_k = top_k
-                else:
-                    last_k = np.argmax(dists[t] > 2)
-                for j in range(last_k):
-                    t1 = int(ids[t, j])
-                    #songId = int(np.searchsorted(landmarkKey, t1, side='right'))
-                    songId = int(index2song[t1])
-                    t0 = int(landmarkKey[songId])
-                    #dt = t1 - t0 - round(t/frame_shift_mul)
-                    dt = (t1 - t0) * frame_shift_mul - t
-                    key = (songId, dt)
-                    if key in scoreboard:
-                        scoreboard[key] += float(dists[t, j])
-                        upcount[key] += [float(dists[t, j]), t, j]
-                    else:
-                        scoreboard[key] = float(dists[t, j])
-                        upcount[key] = [float(dists[t, j]), t, j]
-            
-            if True:
-                # sum of whole sequence
-                N = frame_shift_mul
-                nFrames = embeddings.shape[0]
-                queryLen = (nFrames - 1) // N + 1
-                xn = np.pad(embeddings.numpy(), [(0, queryLen * N - nFrames), (0,0)])
-                xn = xn.reshape([queryLen, N, d]).transpose([1, 0, 2])
-                for songId, dt in scoreboard.keys():
-                    songStart = int(landmarkKey[songId])
-                    songLen = int(landmarkKey[songId+1]) - songStart
-                    t_frame = (dt-1)//N + 1
-                    t_start = max(t_frame, 0)
-                    t_end = min(t_frame + queryLen, songLen)
-                    # get song vector
-                    vectors = np.stack([index.reconstruct(i) for i in range(songStart + t_start, songStart + t_end)])
-                    #vectors = index.reconstruct_n(songStart + t_start, t_end - t_start)
-                    q_start = t_start - t_frame
-                    q_end = t_end - t_frame
-                    # compute sum of segment score
-                    sco = np.dot(xn[:, q_start:q_end].reshape([N, -1]), vectors.flatten())
-                    scoreboard[songId, dt] = np.max(sco).item()
-            
-            scoreboard = [(dist,id_) for id_,dist in scoreboard.items()]
-            for sco, ans_tim in scoreboard:
-                ans = ans_tim[0]
-                song_score[ans] = max(song_score[ans], sco)
-            sco, (ans, tim) = max(scoreboard)
-            upsco = upcount[ans, tim]
+        sco, (ans, tim), song_score = query_embeddings(index, embeddings.numpy(), 10, landmarkKey, index, frame_shift_mul)
+        upsco = []
         ans = songList[ans]
         tim /= frame_shift_mul
         tim *= params['hop_size']
