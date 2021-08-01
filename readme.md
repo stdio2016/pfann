@@ -17,6 +17,7 @@ python tools/traintestsplit.py --csv lists/fma_medium_30s.csv --train lists/fma_
 python tools/traintestsplit.py --csv lists/fma_medium_valtest.csv --train lists/fma_medium_val.csv --train-size 500 --test lists/fma_medium_test.csv --test-size 500
 python tools/traintestsplit.py --csv lists/fma_medium_train.csv --train-size 2000 --train lists/fma_inside_test.csv
 rm test.csv
+python tools/listaudio.py --folder ../pfann_dataset/fma_large --out lists/fma_large.csv
 ```
 
 ### AudioSet
