@@ -160,7 +160,7 @@ if __name__ == "__main__":
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
-        sco, (ans, tim), song_score = query_embeddings(index, embeddings.numpy(), 10, landmarkKey, index, frame_shift_mul)
+        sco, (ans, tim), song_score = query_embeddings(index, embeddings.numpy(), top_k, landmarkKey, index, frame_shift_mul)
         upsco = []
         ans = songList[ans]
         tim /= frame_shift_mul
