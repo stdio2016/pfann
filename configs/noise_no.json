@@ -3,7 +3,7 @@
   "validate_csv": "lists/fma_medium_val.csv",
   "test_csv": "lists/fma_medium_test.csv",
   "music_dir": "../pfann_dataset/fma_medium",
-  "model_dir": "out/models/timeshift_250ms",
+  "model_dir": "out/models/noise_no",
   "cache_dir": "caches",
   "batch_size": 640,
   "shuffle_size": 100,
