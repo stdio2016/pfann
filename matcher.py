@@ -5,14 +5,12 @@ import sys
 import warnings
 
 import faiss
-import julius
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torchvision
-import tensorboardX
 import tqdm
 
 # torchaudio currently (0.7) will throw warning that cannot be disabled

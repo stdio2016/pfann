@@ -5,8 +5,6 @@ import sys
 import argparse
 import warnings
 
-import faiss
-import julius
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
