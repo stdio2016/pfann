@@ -1,4 +1,7 @@
 import csv
+import ctypes
+from ctypes import cdll, c_float, c_int, c_int64, c_void_p, POINTER
+import cProfile
 import math
 import os
 import sys
@@ -22,6 +25,23 @@ import simpleutils
 from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
+
+cpp_accelerate = False
+if cpp_accelerate:
+    mydll = cdll.LoadLibrary('cpp/seqscore')
+    mydll.seq_score.argtypes = [
+        c_void_p,
+        POINTER(c_int64),
+        c_int,
+        POINTER(c_float),
+        c_int,
+        POINTER(c_int64),
+        c_int,
+        POINTER(c_float),
+        c_int,
+        c_int
+    ]
+    mydll.seq_score.restype = c_int
 
 def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
     '''論文進度 24%'''
@@ -65,6 +85,37 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
                 best = sco
                 best_song_t = song_id, t * frame_shift_mul + shift
     return best, best_song_t, song_score
+
+def query_embeddings_cpp(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
+    d = index.d
+    distances, labels = index_gpu.search(query, k)
+    best = -1e999
+    best_song_t = -1, 0
+    song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
+    
+    for shift in range(frame_shift_mul):
+        subquery = np.ascontiguousarray(query[shift::frame_shift_mul])
+        sublabel = np.ascontiguousarray(labels[shift::frame_shift_mul])
+        song_id = mydll.seq_score(
+            int(index_cpu.this),
+            song_pos.ctypes.data_as(POINTER(c_int64)),
+            song_pos.shape[0]-1,
+            subquery.ctypes.data_as(POINTER(c_float)),
+            subquery.shape[0],
+            sublabel.ctypes.data_as(POINTER(c_int64)),
+            k,
+            song_score.ctypes.data_as(POINTER(c_float)),
+            shift,
+            frame_shift_mul
+        )
+        sco = song_score[song_id, 0].item()
+        if sco > best:
+            best = sco
+            best_song_t = song_id, song_score[song_id, 1].item()
+    return best, best_song_t, song_score
+
+if cpp_accelerate:
+    query_embeddings = query_embeddings_cpp
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
