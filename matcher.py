@@ -27,6 +27,7 @@ from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
 
 cpp_accelerate = False
+gpu_accelerate = False
 if cpp_accelerate:
     mydll = cdll.LoadLibrary('cpp/seqscore')
     mydll.seq_score.argtypes = [
@@ -92,7 +93,7 @@ def query_embeddings_cpp(index_gpu, query, k, song_pos, index_cpu, frame_shift_m
     best = -1e999
     best_song_t = -1, 0
     song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
-    
+
     for shift in range(frame_shift_mul):
         subquery = np.ascontiguousarray(query[shift::frame_shift_mul])
         sublabel = np.ascontiguousarray(labels[shift::frame_shift_mul])
@@ -164,6 +165,13 @@ if __name__ == "__main__":
         index.nprobe = params['indexer'].get('nprobe', 50)
         print('num probes:', index.nprobe)
 
+    if gpu_accelerate:
+        co = faiss.GpuMultipleClonerOptions()
+        co.useFloat16 = True
+        gpu_index = faiss.index_cpu_to_all_gpus(index, co, 1)
+    else:
+        gpu_index = index
+
     # doing inference, turn off gradient
     model.eval()
     for param in model.parameters():
@@ -209,7 +217,7 @@ if __name__ == "__main__":
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
-        sco, (ans, tim), song_score = query_embeddings(index, embeddings.numpy(), top_k, landmarkKey, index, frame_shift_mul)
+        sco, (ans, tim), song_score = query_embeddings(gpu_index, embeddings.numpy(), top_k, landmarkKey, index, frame_shift_mul)
         upsco = []
         ans = songList[ans]
         tim /= frame_shift_mul
