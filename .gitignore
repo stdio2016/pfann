@@ -36,6 +36,10 @@ out/results
 *.mp3.png
 
 # compile file
-faisscputest.exe
-faisscputest.obj
 faisscputest
+seqscore
+*.exe
+*.dll
+*.exp
+*.lib
+*.obj

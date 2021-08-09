@@ -50,7 +50,7 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
     distances, labels = index_gpu.search(query, k)
     best = -1e999
     best_song_t = -1, 0
-    song_score = np.zeros(song_pos.shape[0] - 1, dtype=np.float32)
+    song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
     
     for shift in range(frame_shift_mul):
         candidates = []
@@ -80,8 +80,9 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
                     index_cpu.reconstruct(song_start + t+i, vec[i])
             # compute average score
             sco = np.dot(vec.flatten(), subquery.flatten()).item() / sub_len
-            if sco > song_score[song_id]:
-                song_score[song_id] = sco
+            if sco > song_score[song_id, 0]:
+                song_score[song_id, 0] = sco
+                song_score[song_id, 1] = t * frame_shift_mul + shift
             if sco > best:
                 best = sco
                 best_song_t = song_id, t * frame_shift_mul + shift
@@ -222,6 +223,7 @@ if __name__ == "__main__":
         ans = songList[ans]
         tim /= frame_shift_mul
         tim *= params['hop_size']
+        song_score[:, 1] *= params['hop_size'] / frame_shift_mul
         if visualize:
             grads = torch.abs(grads)
             grads = torch.nn.functional.normalize(grads, p=np.inf)
