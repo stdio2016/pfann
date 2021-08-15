@@ -60,9 +60,12 @@ class MusicSegmentDataset(Dataset):
         # datasets data augmentation
         cache_dir = params['cache_dir']
         os.makedirs(cache_dir, exist_ok=True)
-        self.noise = NoiseData(noise_dir=params['noise']['dir'], list_csv=params['noise'][train_val], sample_rate=sample_rate, cache_dir=cache_dir)
-        self.air = AIR(air_dir=params['air']['dir'], list_csv=params['air'][train_val], length=params['air']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
-        self.micirp = MicIRP(mic_dir=params['micirp']['dir'], list_csv=params['micirp'][train_val], length=params['micirp']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
+        if params['noise'][train_val]:
+            self.noise = NoiseData(noise_dir=params['noise']['dir'], list_csv=params['noise'][train_val], sample_rate=sample_rate, cache_dir=cache_dir)
+        if params['air'][train_val]:
+            self.air = AIR(air_dir=params['air']['dir'], list_csv=params['air'][train_val], length=params['air']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
+        if params['micirp'][train_val]:
+            self.micirp = MicIRP(mic_dir=params['micirp']['dir'], list_csv=params['micirp'][train_val], length=params['micirp']['length'], fftconv_n=fftconv_n, sample_rate=sample_rate)
 
         # Load music dataset as memory mapped file
         file_name = os.path.splitext(os.path.split(params[train_val + '_csv'])[1])[0]

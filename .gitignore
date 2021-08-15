@@ -43,3 +43,5 @@ seqscore
 *.exp
 *.lib
 *.obj
+
+logs/
