@@ -56,6 +56,8 @@ int seq_score(
     #pragma omp parallel
     {
         std::vector<float> vec(d);
+        float my_best = -INFINITY;
+        int my_best_song = -1;
         #pragma omp for
         for (int i = 0; i < candidates.size(); i++) {
             int song_id = candidates[i].first;
@@ -75,13 +77,15 @@ int seq_score(
             sco /= query_len;
             tmp_score[i] = sco;
             tmp_t[i] = t * frame_shift_mul + shift;
-            if (sco > best) {
-                #pragma omp critical
-                if (sco > best) {
-                    best = sco;
-                    best_song = song_id;
-                }
+            if (sco > my_best) {
+                my_best = sco;
+                my_best_song = song_id;
             }
+        }
+        #pragma omp critical
+        if (my_best > best || my_best == best && my_best_song < best_song) {
+            best = my_best;
+            best_song = my_best_song;
         }
     }
     for (int i = 0; i < candidates.size(); i++) {
