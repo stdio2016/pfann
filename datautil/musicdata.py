@@ -16,7 +16,7 @@ class MusicDataset(torch.utils.data.Dataset):
         self.frame_shift_mul = self.params['indexer'].get('frame_shift_mul', 1)
         self.files = simpleutils.read_file_list(file_list)
     
-    def __getitem__(self, index):
+    def unsafe_getitem(self, index):
         smprate = self.sample_rate
         
         # resample
@@ -70,6 +70,12 @@ class MusicDataset(torch.utils.data.Dataset):
         wav = wav - wav.mean(dim=1).unsqueeze(1)
         
         return index, self.files[index], wav
+        
+    def __getitem__(self, index):
+        try:
+            return self.unsafe_getitem(index)
+        except Exception as x:
+            return index, self.files[index], torch.zeros(0, self.segment_size)
     
     def __len__(self):
         return len(self.files)

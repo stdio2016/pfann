@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
     params['indexer']['frame_shift_mul'] = 1
     dataset = MusicDataset(file_list_for_db, params)
-    loader = DataLoader(dataset, num_workers=4)
+    loader = DataLoader(dataset, num_workers=4, batch_size=None)
     
     mel = build_mel_spec_layer(params).to(device)
     
@@ -73,8 +73,14 @@ if __name__ == "__main__":
     for dat in tqdm.tqdm(loader):
         i, name, wav = dat
         i = int(i) # i is leaking file handles!
-        # batch size should be less than 20 because query contains at most 19 segments
-        for batch in torch.split(wav.squeeze(0), 16):
+        
+        if wav.shape[0] == 0:
+            # load file error!
+            print('load %s error!' % name)
+            landmarkKey.append(0)
+            continue
+        
+        for batch in torch.split(wav, 32):
             g = batch.to(device)
             
             # Mel spectrogram
@@ -87,9 +93,11 @@ if __name__ == "__main__":
                 lbl.append(i)
             embeddings_file.write(z.numpy().tobytes())
             embeddings += z.shape[0]
-        landmarkKey.append(int(wav.shape[1]))
+        landmarkKey.append(int(wav.shape[0]))
     embeddings_file.flush()
     print('total', embeddings, 'embeddings')
+    if embeddings == 0:
+        print('The database is empty!')
     #writer = tensorboardX.SummaryWriter()
     #writer.add_embedding(embeddings, lbl)
     
@@ -100,7 +108,12 @@ if __name__ == "__main__":
     embeddings = np.fromfile(os.path.join(dir_for_db, 'embeddings'), dtype=np.float32).reshape([-1, d])
     if not index.is_trained:
         index.verbose = True
-        index.train(embeddings)
+        try:
+            index.train(embeddings)
+        except RuntimeError as x:
+            print(x)
+            if "Error: 'nx >= k' failed" in str(x):
+                index = faiss.IndexFlatIP(d)
     #index = faiss.IndexFlatIP(d)
     
     # write database

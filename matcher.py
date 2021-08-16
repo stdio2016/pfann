@@ -51,6 +51,8 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
     best = -1e999
     best_song_t = -1, 0
     song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
+    if index_gpu.ntotal == 0:
+        return best, best_song_t, song_score
     
     for shift in range(frame_shift_mul):
         candidates = []
@@ -156,7 +158,8 @@ if __name__ == "__main__":
     
     landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int32)
     index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
-    index.make_direct_map()
+    if hasattr(index, 'make_direct_map'):
+        index.make_direct_map()
     assert len(songList) == landmarkKey.shape[0]
     index2song = np.repeat(np.arange(len(songList)), landmarkKey)
     landmarkKey = np.pad(np.cumsum(landmarkKey, dtype=np.int64), (1, 0))
@@ -180,7 +183,7 @@ if __name__ == "__main__":
 
     dataset = MusicDataset(file_list_for_query, params)
     # no task parallelism
-    loader = DataLoader(dataset, num_workers=0)
+    loader = DataLoader(dataset, num_workers=0, batch_size=None)
     
     mel = build_mel_spec_layer(params).to(device)
     
@@ -195,8 +198,24 @@ if __name__ == "__main__":
         specs = []
         i, name, wav = dat
         i = int(i) # i is leaking file handles!
+        
+        if wav.shape[0] == 0:
+            # load file error!
+            print('load %s error!' % name)
+            ans = 'error'
+            sco = -1e999
+            tim = 0
+            fout.write('%s\t%s\n' % (name, ans))
+            fout.flush()
+            detail_writer.writerow([name, ans, sco, tim])
+            fout2.flush()
+            
+            song_score = np.zeros([len(songList), 2], dtype=np.float32)
+            fout_score.write(song_score.tobytes())
+            continue
+        
         # batch size should be less than 20 because query contains at most 19 segments
-        for batch in DataLoader(wav.squeeze(0), batch_size=16):
+        for batch in torch.split(wav, 16):
             g = batch.to(device)
             
             # Mel spectrogram
@@ -238,9 +257,9 @@ if __name__ == "__main__":
             grads = torch.flip(grads, [1])
             grads[:,:,::32] = 0
             torchvision.utils.save_image(grads, '%s.png' % os.path.basename(name[0]))
-        fout.write('%s\t%s\n' % (name[0], ans))
+        fout.write('%s\t%s\n' % (name, ans))
         fout.flush()
-        detail_writer.writerow([name[0], ans, sco, tim] + upsco)
+        detail_writer.writerow([name, ans, sco, tim] + upsco)
         fout2.flush()
         
         fout_score.write(song_score.tobytes())
