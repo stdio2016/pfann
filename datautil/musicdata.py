@@ -2,6 +2,8 @@ import julius
 import numpy as np
 import torch
 import torch.nn.functional as F
+import multiprocessing as mp
+import time
 
 from datautil.audio import stream_audio
 
@@ -17,6 +19,9 @@ class MusicDataset(torch.utils.data.Dataset):
         self.files = simpleutils.read_file_list(file_list)
     
     def unsafe_getitem(self, index):
+        logger = mp.get_logger()
+        logger.info('enter MusicDataset.getitem')
+        tm_0 = time.time()
         smprate = self.sample_rate
         
         # resample
@@ -31,7 +36,14 @@ class MusicDataset(torch.utils.data.Dataset):
         new_sec = smprate
         strip_head = 0
         wav = []
+
+        tm_1 = time.time()
+        tm_resample = 0.0
+        tm_load = tm_1 - tm_0
+
         for b in stm.stream:
+            tm_2 = time.time()
+            tm_load += tm_2 - tm_1
             b = np.array(b).reshape([-1, stm.nchannels])
             b = np.multiply(b, 1/32768, dtype=np.float32)
             arr.append(b)
@@ -45,11 +57,17 @@ class MusicDataset(torch.utils.data.Dataset):
                 arr = [arr[minute-second:].copy()]
                 strip_head = new_sec//2
                 n -= minute-second
+            tm_1 = time.time()
+            tm_resample += tm_1 - tm_2
         # resample tail part
         arr = np.concatenate(arr)
         out = torch.from_numpy(arr.T)
         wav.append(resampler(out)[:, strip_head : ])
         wav = torch.cat(wav, dim=1)
+
+        tm_2 = time.time()
+        tm_resample += tm_2 - tm_1
+        logger.info('load %.6fs resample %.6fs', tm_load, tm_resample)
         
         # stereo to mono
         # check if it is fake stereo
@@ -57,7 +75,7 @@ class MusicDataset(torch.utils.data.Dataset):
             pow1 = ((wav[0] - wav[1])**2).mean()
             pow2 = ((wav[0] + wav[1])**2).mean()
             if pow1 > pow2 * 1000:
-                print('fake stereo with opposite phase detected: %s' % self.files[index])
+                logger.warning('fake stereo with opposite phase detected: %s', self.files[index])
                 wav[1] *= -1
         wav = wav.mean(dim=0)
 
@@ -68,6 +86,9 @@ class MusicDataset(torch.utils.data.Dataset):
         # slice overlapping segments
         wav = wav.unfold(0, self.segment_size, self.hop_size//self.frame_shift_mul)
         wav = wav - wav.mean(dim=1).unsqueeze(1)
+
+        tm_3 = time.time()
+        logger.info('stereo to mono %.6fs', tm_3 - tm_2)
         
         return index, self.files[index], wav
         
@@ -75,6 +96,8 @@ class MusicDataset(torch.utils.data.Dataset):
         try:
             return self.unsafe_getitem(index)
         except Exception as x:
+            logger = mp.get_logger()
+            logger.exception(x)
             return index, self.files[index], torch.zeros(0, self.segment_size)
     
     def __len__(self):

@@ -1,10 +1,10 @@
 import csv
 import ctypes
 from ctypes import cdll, c_float, c_int, c_int64, c_void_p, POINTER
-import cProfile
 import math
 import os
 import sys
+import time
 import warnings
 
 import faiss
@@ -26,6 +26,8 @@ from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
 
+simpleutils.init_logger('matcher')
+
 cpp_accelerate = False
 gpu_accelerate = False
 if cpp_accelerate:
@@ -46,8 +48,11 @@ if cpp_accelerate:
 
 def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
     '''論文進度 24%'''
+    logger = mp.get_logger()
+    tm_1 = time.time()
     d = index.d
     distances, labels = index_gpu.search(query, k)
+    tm_2 = time.time()
     best = -1e999
     best_song_t = -1, 0
     song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
@@ -88,6 +93,8 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
             if sco > best:
                 best = sco
                 best_song_t = song_id, t * frame_shift_mul + shift
+    tm_3 = time.time()
+    logger.info('search %.6fs rerank %.6fs', tm_2-tm_1, tm_3-tm_2)
     return best, best_song_t, song_score
 
 def query_embeddings_cpp(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
@@ -123,6 +130,7 @@ if cpp_accelerate:
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
+    logger = mp.get_logger()
     if len(sys.argv) < 4:
         print('Usage: python %s <query list> <database dir> <result file>' % sys.argv[0])
         sys.exit()
@@ -197,11 +205,13 @@ if __name__ == "__main__":
         grads = []
         specs = []
         i, name, wav = dat
+        logger.info('get query %s', name)
+        tm_1 = time.time()
         i = int(i) # i is leaking file handles!
         
         if wav.shape[0] == 0:
             # load file error!
-            print('load %s error!' % name)
+            logger.error('load %s error!', name)
             ans = 'error'
             sco = -1e999
             tim = 0
@@ -234,6 +244,10 @@ if __name__ == "__main__":
             z = torch.nn.functional.normalize(z, p=2)
             embeddings.append(z)
         embeddings = torch.cat(embeddings)
+
+        tm_2 = time.time()
+        logger.info('compute embedding %.6fs', tm_2 - tm_1)
+
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
@@ -257,12 +271,16 @@ if __name__ == "__main__":
             grads = torch.flip(grads, [1])
             grads[:,:,::32] = 0
             torchvision.utils.save_image(grads, '%s.png' % os.path.basename(name[0]))
+
+        tm_1 = time.time()
         fout.write('%s\t%s\n' % (name, ans))
         fout.flush()
         detail_writer.writerow([name, ans, sco, tim] + upsco)
         fout2.flush()
         
         fout_score.write(song_score.tobytes())
+        tm_2 = time.time()
+        logger.info('output answer %.6fs', tm_2 - tm_1)
     fout.close()
     fout2.close()
 else:

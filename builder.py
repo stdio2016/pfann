@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import time
 import warnings
 
 import faiss
@@ -22,6 +23,8 @@ import simpleutils
 from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
+
+simpleutils.init_logger('builder')
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
@@ -71,7 +74,10 @@ if __name__ == "__main__":
     landmarkKey = []
     embeddings = 0
     for dat in tqdm.tqdm(loader):
+        logger = mp.get_logger()
         i, name, wav = dat
+        logger.info('get music %s', name)
+        tm_0 = time.time()
         i = int(i) # i is leaking file handles!
         
         if wav.shape[0] == 0:
@@ -94,6 +100,8 @@ if __name__ == "__main__":
             embeddings_file.write(z.numpy().tobytes())
             embeddings += z.shape[0]
         landmarkKey.append(int(wav.shape[0]))
+        tm_1 = time.time()
+        logger.info('compute embedding %.6fs', tm_1 - tm_0)
     embeddings_file.flush()
     print('total', embeddings, 'embeddings')
     if embeddings == 0:

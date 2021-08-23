@@ -2,6 +2,8 @@
 import csv
 import hashlib
 import json
+import logging
+import multiprocessing as mp
 import os
 import tempfile
 import time
@@ -65,3 +67,11 @@ def download_tmp_from_s3(s3url):
     except Exception as x:
         os.unlink(tmpname)
         raise RuntimeError('Unable to download %s: %s' % (s3url, x))
+
+def init_logger(app_name):
+    os.makedirs('logs', exist_ok=True)
+    logger = mp.get_logger()
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler('logs/%s' % app_name)
+    handler.setFormatter(logging.Formatter('[%(asctime)s] [%(processName)s/%(levelname)s] %(message)s'))
+    logger.addHandler(handler)
