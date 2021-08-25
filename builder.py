@@ -24,9 +24,10 @@ from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
 
-simpleutils.init_logger('builder')
-
 if __name__ == "__main__":
+    logger_init = simpleutils.MultiProcessInitLogger('builder')
+    logger_init()
+    
     mp.set_start_method('spawn')
     if len(sys.argv) < 3:
         print('Usage: python %s <music list file> <db location>' % sys.argv[0])
@@ -64,7 +65,7 @@ if __name__ == "__main__":
 
     params['indexer']['frame_shift_mul'] = 1
     dataset = MusicDataset(file_list_for_db, params)
-    loader = DataLoader(dataset, num_workers=4, batch_size=None)
+    loader = DataLoader(dataset, num_workers=4, batch_size=None, worker_init_fn=logger_init)
     
     mel = build_mel_spec_layer(params).to(device)
     

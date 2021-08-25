@@ -26,8 +26,6 @@ from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
 
-simpleutils.init_logger('matcher')
-
 cpp_accelerate = False
 gpu_accelerate = False
 if cpp_accelerate:
@@ -47,7 +45,7 @@ if cpp_accelerate:
     mydll.seq_score.restype = c_int
 
 def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
-    '''論文進度 24%'''
+    '''論文進度 30%'''
     logger = mp.get_logger()
     tm_1 = time.time()
     d = index.d
@@ -98,8 +96,11 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
     return best, best_song_t, song_score
 
 def query_embeddings_cpp(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
+    logger = mp.get_logger()
+    tm_1 = time.time()
     d = index.d
     distances, labels = index_gpu.search(query, k)
+    tm_2 = time.time()
     best = -1e999
     best_song_t = -1, 0
     song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
@@ -123,12 +124,17 @@ def query_embeddings_cpp(index_gpu, query, k, song_pos, index_cpu, frame_shift_m
         if sco > best:
             best = sco
             best_song_t = song_id, song_score[song_id, 1].item()
+    tm_3 = time.time()
+    logger.info('search %.6fs rerank %.6fs', tm_2-tm_1, tm_3-tm_2)
     return best, best_song_t, song_score
 
 if cpp_accelerate:
     query_embeddings = query_embeddings_cpp
 
 if __name__ == "__main__":
+    logger_init = simpleutils.MultiProcessInitLogger('matcher')
+    logger_init()
+    
     mp.set_start_method('spawn')
     logger = mp.get_logger()
     if len(sys.argv) < 4:

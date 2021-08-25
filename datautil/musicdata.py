@@ -20,7 +20,7 @@ class MusicDataset(torch.utils.data.Dataset):
     
     def unsafe_getitem(self, index):
         logger = mp.get_logger()
-        logger.info('enter MusicDataset.getitem')
+        logger.info('MusicDataset getitem %s', self.files[index])
         tm_0 = time.time()
         smprate = self.sample_rate
         

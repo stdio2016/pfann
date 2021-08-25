@@ -1,5 +1,6 @@
 # every utils that don't use torch
 import csv
+import datetime
 import hashlib
 import json
 import logging
@@ -72,6 +73,13 @@ def init_logger(app_name):
     os.makedirs('logs', exist_ok=True)
     logger = mp.get_logger()
     logger.setLevel(logging.INFO)
-    handler = logging.FileHandler('logs/%s' % app_name)
+    handler = logging.FileHandler('logs/%s.log' % app_name, encoding="utf8")
     handler.setFormatter(logging.Formatter('[%(asctime)s] [%(processName)s/%(levelname)s] %(message)s'))
     logger.addHandler(handler)
+
+class MultiProcessInitLogger:
+    def __init__(self, app_name):
+        date_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+        self.log_name = app_name + '-' + date_str
+    def __call__(self, *args):
+        init_logger(self.log_name)
