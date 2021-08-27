@@ -87,10 +87,10 @@ def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
             sco = np.dot(vec.flatten(), subquery.flatten()).item() / sub_len
             if sco > song_score[song_id, 0]:
                 song_score[song_id, 0] = sco
-                song_score[song_id, 1] = t * frame_shift_mul + shift
+                song_score[song_id, 1] = t * frame_shift_mul - shift
             if sco > best:
                 best = sco
-                best_song_t = song_id, t * frame_shift_mul + shift
+                best_song_t = song_id, t * frame_shift_mul - shift
     tm_3 = time.time()
     logger.info('search %.6fs rerank %.6fs', tm_2-tm_1, tm_3-tm_2)
     return best, best_song_t, song_score

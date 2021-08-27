@@ -76,7 +76,7 @@ int seq_score(
             }
             sco /= query_len;
             tmp_score[i] = sco;
-            tmp_t[i] = t * frame_shift_mul + shift;
+            tmp_t[i] = t * frame_shift_mul - shift;
             if (sco > my_best) {
                 my_best = sco;
                 my_best_song = song_id;
