@@ -38,7 +38,7 @@ accuracy() {
 }
 accuracy_snr() {
   echo snr=$3
-  if [ $1 == lm ]; then
+  if [[ $1 =~ ^lm ]]; then
     python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_snr$3.txt.csv
   else
     python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_snr$3_detail.csv

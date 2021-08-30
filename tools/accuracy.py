@@ -40,6 +40,6 @@ with open(args.predict, 'r') as fin:
         else:
             fail_time.append(actual_tm % 0.5)
         all_time.append(actual_tm % 0.5)
-print("exact match correct %d acc %f" % (correct_exact, correct_exact/total))
-print("near match correct %d acc %f" % (correct_near, correct_near/total))
-print("song correct %d acc %f" % (correct, correct/total))
+print("exact match correct %d acc %.2f" % (correct_exact, correct_exact/total*100))
+print("near match correct %d acc %.2f" % (correct_near, correct_near/total*100))
+print("song correct %d acc %.2f" % (correct, correct/total*100))

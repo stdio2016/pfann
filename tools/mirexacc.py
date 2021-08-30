@@ -54,4 +54,4 @@ for query in PR:
         print('query %s in prediction file not found!!' % query)
         print('ARE YOU KIDDING ME?')
         exit(1)
-print('song correct %d acc %f' % (correct, correct/total))
+print('song correct %d acc %.2f' % (correct, correct/total * 100))
