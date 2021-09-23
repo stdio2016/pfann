@@ -45,7 +45,6 @@ if cpp_accelerate:
     mydll.seq_score.restype = c_int
 
 def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
-    '''論文進度 30%'''
     logger = mp.get_logger()
     tm_1 = time.time()
     d = index.d
@@ -132,7 +131,7 @@ if cpp_accelerate:
     query_embeddings = query_embeddings_cpp
 
 if __name__ == "__main__":
-    logger_init = simpleutils.MultiProcessInitLogger('matcher')
+    logger_init = simpleutils.MultiProcessInitLogger('nnmatcher')
     logger_init()
     
     mp.set_start_method('spawn')
@@ -201,6 +200,7 @@ if __name__ == "__main__":
     
     mel = build_mel_spec_layer(params).to(device)
     
+    tm_0 = time.time()
     fout = open(result_file, 'w', encoding='utf8', newline='\n')
     fout2 = open(result_file2, 'w', encoding='utf8', newline='\n')
     fout_score = open(result_file_score, 'wb')
@@ -289,5 +289,6 @@ if __name__ == "__main__":
         logger.info('output answer %.6fs', tm_2 - tm_1)
     fout.close()
     fout2.close()
+    logger.info('total query time %.6fs', time.time() - tm_0)
 else:
     torch.set_num_threads(1)
