@@ -18,15 +18,25 @@ builder() {
 }
 matcher() {
   # model dataset
-  if [ $2 == mirex ]; then
-    python matcher.py lists/mirex-query.txt out/dbs/$1_$2 out/results/$1_$2.txt
+  if [[ $1 =~ ^lm ]]; then
+    prog=../pfa/matcher
   else
-    python matcher.py out/queries/$2/list.txt out/dbs/$1_$2 out/results/$1_$2.txt
+    prog=python matcher.py
+  fi
+  if [ $2 == mirex ]; then
+    $prog lists/mirex-query.txt out/dbs/$1_$2 out/results/$1_$2.txt
+  else
+    $prog out/queries/$2/list.txt out/dbs/$1_$2 out/results/$1_$2.txt
   fi
 }
 matcher_snr() {
   # model dataset snr
-  python matcher.py out/queries/$2_snr$3/list.txt out/dbs/$1_$2 out/results/$1_$2_snr$3.txt
+  if [[ $1 =~ ^lm ]]; then
+    prog=../pfa/matcher
+  else
+    prog=python matcher.py
+  fi
+  $prog out/queries/$2_snr$3/list.txt out/dbs/$1_$2 out/results/$1_$2_snr$3.txt
 }
 accuracy() {
   # model dataset
