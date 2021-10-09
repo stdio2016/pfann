@@ -21,7 +21,7 @@ matcher() {
   if [[ $1 =~ ^lm ]]; then
     prog=../pfa/matcher
   else
-    prog=python matcher.py
+    prog="python matcher.py"
   fi
   if [ $2 == mirex ]; then
     $prog lists/mirex-query.txt out/dbs/$1_$2 out/results/$1_$2.txt
@@ -34,9 +34,18 @@ matcher_snr() {
   if [[ $1 =~ ^lm ]]; then
     prog=../pfa/matcher
   else
-    prog=python matcher.py
+    prog="python matcher.py"
   fi
   $prog out/queries/$2_snr$3/list.txt out/dbs/$1_$2 out/results/$1_$2_snr$3.txt
+}
+matcher_snr_full() {
+  # model dataset snr
+  if [[ $1 =~ ^lm ]]; then
+    prog=../pfa/matcher
+  else
+    prog="python matcher.py"
+  fi
+  $prog out/queries/$2_snr$3/list.txt out/dbs/$1_full out/results/$1_$2_full_snr$3.txt
 }
 accuracy() {
   # model dataset
@@ -52,6 +61,14 @@ accuracy_snr() {
     python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_snr$3.txt.csv
   else
     python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_snr$3_detail.csv
+  fi
+}
+accuracy_snr_full() {
+  echo snr=$3
+  if [[ $1 =~ ^lm ]]; then
+    python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_full_snr$3.txt.csv
+  else
+    python tools/accuracy.py out/queries/$2_snr$3/expected.csv out/results/$1_$2_full_snr$3_detail.csv
   fi
 }
 forall_snr() {
@@ -75,6 +92,10 @@ do
       forall_snr matcher_snr $model $dataset || exit 1;;
     "-accuracy_snr" )
       forall_snr accuracy_snr $model $dataset || exit 1;;
+    "-match_snr_full" )
+      forall_snr matcher_snr_full $model $dataset || exit 1;;
+    "-accuracy_snr_full" )
+      forall_snr accuracy_snr_full $model $dataset || exit 1;;
     "-match" )
       matcher $model $dataset || exit 1;;
     "-accuracy" )
