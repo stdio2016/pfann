@@ -52,6 +52,7 @@ def similarity_loss(y, tau):
     return loss
 
 def train(model, optimizer, train_data, val_data, batch_size, device, params, writer, start_epoch, scaler):
+    logger = mp.get_logger()
     minibatch = 40
     if torch.cuda.get_device_properties(0).total_memory > 11e9:
         minibatch = 640
@@ -61,6 +62,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     os.makedirs(params['model_dir'], exist_ok=True)
     specaug = SpecAugment(params)
     for epoch in range(start_epoch+1, total_epoch):
+        logger.info('epoch %d', epoch+1)
         model.train()
         tau = params.get('tau', 0.05)
         print('epoch %d' % (epoch+1))
@@ -183,6 +185,7 @@ def train(model, optimizer, train_data, val_data, batch_size, device, params, wr
     torch.save(model.state_dict(), os.path.join(params['model_dir'], 'model.pt'))
 
 def test_train(args):
+    logger = mp.get_logger()
     params = simpleutils.read_config(args.params)
     torch.manual_seed(123)
     torch.cuda.manual_seed(123)
@@ -241,7 +244,8 @@ def test_train(args):
     
     if torch.cuda.is_available():
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
-    
+
+    logger.info('load augmentation data')
     train_data = SegmentedDataLoader('train', params, num_workers=args.workers)
     print('training data contains %d samples' % len(train_data.dataset))
     
@@ -253,10 +257,15 @@ def test_train(args):
     train(model, optimizer, train_data, val_data, batch_size, device, params, writer, epoch, scaler)
 
 if __name__ == "__main__":
+    logger_init = simpleutils.MultiProcessInitLogger('train')
+    logger_init()
+    logger = mp.get_logger()
+    logger.info('logger init')
     torch.use_deterministic_algorithms(True)
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('-w', '--workers', type=int, default=4)
     args = args.parse_args()
+    logger.info(args)
     test_train(args)

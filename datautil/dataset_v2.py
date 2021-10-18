@@ -211,8 +211,9 @@ class TwoStageShuffler(Sampler):
 
     def baseline_shuffle(self):
         # the same as DataLoader with shuffle=True, but with a music preloader
-        for song in range(self.music_data.get_num_songs()):
-            self.preload(song)
+        # 2021/10/18 sorry I have to remove preloader
+        #for song in range(self.music_data.get_num_songs()):
+        #    self.preload(song)
 
         yield from torch.randperm(len(self), generator=self.generator).tolist()
     
