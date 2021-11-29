@@ -1,7 +1,7 @@
 # pfann
-reproduce paper: Neural Audio Fingerprint for High-specific Audio Retrieval based on Contrasive Learning
+This is an unofficial reproduction of paper ["Neural Audio Fingerprint for High-specific Audio Retrieval based on Contrasive Learning."](https://arxiv.org/abs/2010.11910)
 
-2020/11/27: initial model
+Now I have a thesis that is a "trivial" improvement to the above paper: "Improvement of Neural Network- and Landmark-based Audio Fingerprinting" (in Traditional Chinese). [Link here](thesis.pdf)
 
 ## Prepare dataset
 
@@ -111,4 +111,9 @@ python matcher.py <query list> <db location> <output result file>
 ## Evaluation
 ```
 python tools/accuracy.py /path/to/query6s/expected.csv /path/to/result_detail.csv
+```
+
+## Ensemble experiment
+```bash
+python ensemble/svmheatmap2.py out/lm_ out/shift_4_ out/svm lin_acc.csv
 ```
