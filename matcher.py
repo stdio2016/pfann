@@ -161,9 +161,9 @@ if __name__ == "__main__":
     frame_shift_mul = params['indexer'].get('frame_shift_mul', 1)
 
     print('loading model...')
-    device = torch.device('cuda')
+    device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
     model = FpNetwork(d, h, u, F_bin, T, params['model']).to(device)
-    model.load_state_dict(torch.load(os.path.join(dir_for_db, 'model.pt')))
+    model.load_state_dict(torch.load(os.path.join(dir_for_db, 'model.pt'), map_location=device))
     print('model loaded')
     
     print('loading database...')

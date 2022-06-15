@@ -53,9 +53,9 @@ if __name__ == "__main__":
     T = (segn + params['stft_hop'] - 1) // params['stft_hop']
 
     print('loading model...')
-    device = torch.device('cuda')
+    device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
     model = FpNetwork(d, h, u, F_bin, T, params['model']).to(device)
-    model.load_state_dict(torch.load(os.path.join(params['model_dir'], 'model.pt')))
+    model.load_state_dict(torch.load(os.path.join(params['model_dir'], 'model.pt'), map_location=device))
     print('model loaded')
 
     # doing inference, turn off gradient

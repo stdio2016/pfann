@@ -45,3 +45,4 @@ seqscore
 *.obj
 
 logs/
+.DS_Store
