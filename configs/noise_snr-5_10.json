@@ -51,6 +51,7 @@
   },
   "indexer": {
     "index_factory": "IVF200,PQ64x8np",
-    "top_k": 100
+    "top_k": 100,
+    "frame_shift_mul": 1
   }
 }
