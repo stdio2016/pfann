@@ -1,6 +1,4 @@
 import csv
-import ctypes
-from ctypes import cdll, c_float, c_int, c_int64, c_void_p, POINTER
 import math
 import os
 import sys
@@ -25,110 +23,7 @@ import simpleutils
 from model import FpNetwork
 from datautil.melspec import build_mel_spec_layer
 from datautil.musicdata import MusicDataset
-
-cpp_accelerate = False
-gpu_accelerate = False
-if cpp_accelerate:
-    mydll = cdll.LoadLibrary('cpp/seqscore')
-    mydll.seq_score.argtypes = [
-        c_void_p,
-        POINTER(c_int64),
-        c_int,
-        POINTER(c_float),
-        c_int,
-        POINTER(c_int64),
-        c_int,
-        POINTER(c_float),
-        c_int,
-        c_int
-    ]
-    mydll.seq_score.restype = c_int
-
-def query_embeddings(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
-    logger = mp.get_logger()
-    tm_1 = time.time()
-    d = index.d
-    distances, labels = index_gpu.search(query, k)
-    tm_2 = time.time()
-    best = -1e999
-    best_song_t = -1, 0
-    song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
-    if index_gpu.ntotal == 0:
-        return best, best_song_t, song_score
-    
-    for shift in range(frame_shift_mul):
-        candidates = []
-        subquery = query[shift::frame_shift_mul]
-        sub_len = subquery.shape[0]
-        for t in range(sub_len):
-            lab = labels[t * frame_shift_mul + shift]
-            lab = lab[lab != -1]
-            song_id = np.searchsorted(song_pos, lab, side='right') - 1
-            song_t = lab - song_pos[song_id] - t
-            candidates.append(np.stack([song_id, song_t], axis=1))
-        # according to NumPy, np.unique returns sorted array
-        candidates = np.unique(np.concatenate(candidates), axis=0)
-        
-        vec = np.zeros_like(subquery)
-        for c in candidates:
-            song_id = c[0].item()
-            song_start = song_pos[song_id].item()
-            song_len = song_pos[song_id+1].item() - song_start
-            t = c[1].item()
-            
-            # get corresponding embeddings from db
-            for i in range(sub_len):
-                if t+i < 0 or t+i >= song_len:
-                    vec[i] = 0.0
-                else:
-                    index_cpu.reconstruct(song_start + t+i, vec[i])
-            # compute average score
-            sco = np.dot(vec.flatten(), subquery.flatten()).item() / sub_len
-            if sco > song_score[song_id, 0]:
-                song_score[song_id, 0] = sco
-                song_score[song_id, 1] = t * frame_shift_mul - shift
-            if sco > best:
-                best = sco
-                best_song_t = song_id, t * frame_shift_mul - shift
-    tm_3 = time.time()
-    logger.info('search %.6fs rerank %.6fs', tm_2-tm_1, tm_3-tm_2)
-    return best, best_song_t, song_score
-
-def query_embeddings_cpp(index_gpu, query, k, song_pos, index_cpu, frame_shift_mul):
-    logger = mp.get_logger()
-    tm_1 = time.time()
-    d = index.d
-    distances, labels = index_gpu.search(query, k)
-    tm_2 = time.time()
-    best = -1e999
-    best_song_t = -1, 0
-    song_score = np.zeros([song_pos.shape[0] - 1, 2], dtype=np.float32)
-
-    for shift in range(frame_shift_mul):
-        subquery = np.ascontiguousarray(query[shift::frame_shift_mul])
-        sublabel = np.ascontiguousarray(labels[shift::frame_shift_mul])
-        song_id = mydll.seq_score(
-            int(index_cpu.this),
-            song_pos.ctypes.data_as(POINTER(c_int64)),
-            song_pos.shape[0]-1,
-            subquery.ctypes.data_as(POINTER(c_float)),
-            subquery.shape[0],
-            sublabel.ctypes.data_as(POINTER(c_int64)),
-            k,
-            song_score.ctypes.data_as(POINTER(c_float)),
-            shift,
-            frame_shift_mul
-        )
-        sco = song_score[song_id, 0].item()
-        if sco > best:
-            best = sco
-            best_song_t = song_id, song_score[song_id, 1].item()
-    tm_3 = time.time()
-    logger.info('search %.6fs rerank %.6fs', tm_2-tm_1, tm_3-tm_2)
-    return best, best_song_t, song_score
-
-if cpp_accelerate:
-    query_embeddings = query_embeddings_cpp
+from database import Database
 
 if __name__ == "__main__":
     logger_init = simpleutils.MultiProcessInitLogger('nnmatcher')
@@ -167,27 +62,8 @@ if __name__ == "__main__":
     print('model loaded')
     
     print('loading database...')
-    songList = simpleutils.read_file_list(os.path.join(dir_for_db, 'songList.txt'))
-    
-    landmarkKey = np.fromfile(os.path.join(dir_for_db, 'landmarkKey'), dtype=np.int32)
-    index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
-    if hasattr(index, 'make_direct_map'):
-        index.make_direct_map()
-    assert len(songList) == landmarkKey.shape[0]
-    index2song = np.repeat(np.arange(len(songList)), landmarkKey)
-    landmarkKey = np.pad(np.cumsum(landmarkKey, dtype=np.int64), (1, 0))
+    db = Database(dir_for_db, params['indexer'], params['hop_size'])
     print('database loaded')
-    if isinstance(index, faiss.IndexIVF):
-        print('inverse list count:', index.nlist)
-        index.nprobe = params['indexer'].get('nprobe', 50)
-        print('num probes:', index.nprobe)
-
-    if gpu_accelerate:
-        co = faiss.GpuMultipleClonerOptions()
-        co.useFloat16 = True
-        gpu_index = faiss.index_cpu_to_all_gpus(index, co, 1)
-    else:
-        gpu_index = index
 
     # doing inference, turn off gradient
     model.eval()
@@ -226,7 +102,7 @@ if __name__ == "__main__":
             detail_writer.writerow([name, ans, sco, tim])
             fout2.flush()
             
-            song_score = np.zeros([len(songList), 2], dtype=np.float32)
+            song_score = np.zeros([len(db.songList), 2], dtype=np.float32)
             fout_score.write(song_score.tobytes())
             continue
         
@@ -257,12 +133,12 @@ if __name__ == "__main__":
         if visualize:
             grads = torch.cat(grads)
             specs = torch.cat(specs)
-        sco, (ans, tim), song_score = query_embeddings(gpu_index, embeddings.numpy(), top_k, landmarkKey, index, frame_shift_mul)
+        sco, (ans, tim), song_score = db.query_embeddings(embeddings.numpy())
         upsco = []
-        ans = songList[ans]
-        tim /= frame_shift_mul
-        tim *= params['hop_size']
-        song_score[:, 1] *= params['hop_size'] / frame_shift_mul
+        ans = db.songList[ans]
+        #tim /= frame_shift_mul
+        #tim *= params['hop_size']
+        #song_score[:, 1] *= params['hop_size'] / frame_shift_mul
         if visualize:
             grads = torch.abs(grads)
             grads = torch.nn.functional.normalize(grads, p=np.inf)

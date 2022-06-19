@@ -5,6 +5,9 @@ g++ -O3 -I ../../faiss -shared -fPIC -fopenmp seqscore.cpp ~/miniconda3/lib/libf
 
 On Windows:
 cl /O2 /I ../../faiss /EHsc /LD /openmp seqscore.cpp %HomePath%\Miniconda3\Library\lib\faiss_avx2.lib /Feseqscore
+
+On Mac miniforge: please use conda compilers to compile faiss
+clang++ -O3 -I ../../faiss -shared -fPIC -Xclang -fopenmp  seqscore.cpp ../../faiss/build/faiss/python/_swigfaiss.so -L $CONDA_PREFIX/lib -l omp -std=c++11 -o seqscore
 */
 #include <algorithm>
 #include <cmath>
