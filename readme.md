@@ -3,6 +3,9 @@ This is an unofficial reproduction of paper ["Neural Audio Fingerprint for High-
 
 Now I have a thesis that is a "trivial" improvement to the above paper: "Improvement of Neural Network- and Landmark-based Audio Fingerprinting" (in Traditional Chinese). [Link here](thesis.pdf)
 
+Note: I am now employed and our company does not allow GitHub login during work.
+I have less time to work on my side project or maintain my thesis code, and I do not have access to high performance GPU (currently), so I cannot solve compatibility issues or problems related to training.
+
 ## Prepare dataset
 
 ### FMA dataset
