@@ -9,7 +9,7 @@ import torch.multiprocessing as mp
 
 import simpleutils
 
-cpp_accelerate = True
+cpp_accelerate = False
 gpu_accelerate = False
 if cpp_accelerate:
     mydll = cdll.LoadLibrary('cpp/seqscore')
@@ -28,6 +28,19 @@ if cpp_accelerate:
     mydll.seq_score.restype = c_int
 
 class Database:
+    def make_direct_map(self, index):
+        index = faiss.downcast_index(index)
+        if hasattr(index, 'make_direct_map'):
+            index.make_direct_map()
+            return True
+        elif isinstance(index, faiss.IndexPreTransform):
+            return self.make_direct_map(index.index)
+        elif isinstance(index, faiss.IndexFlat):
+            return True
+        else:
+            print(type(index), 'does not support direct map yet!')
+            return False
+
     def __init__(self, dir_for_db, indexer_params, hop_size):
         self.dir_for_db = dir_for_db
         self.params = indexer_params
@@ -42,8 +55,12 @@ class Database:
         self.song_pos = np.pad(np.cumsum(self.song_pos, dtype=np.int64), (1, 0))
 
         self.index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
-        if hasattr(self.index, 'make_direct_map'):
-            self.index.make_direct_map()
+        try:
+            self.index.reconstruct(0)
+        except RuntimeError:
+            if not self.make_direct_map(self.index):
+                print('This index cannot recover vector')
+            self.index.reconstruct(0)
 
         if isinstance(self.index, faiss.IndexIVF):
             print('inverse list count:', self.index.nlist)
