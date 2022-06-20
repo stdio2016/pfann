@@ -80,13 +80,21 @@ python train.py --param configs/default.json -w4
 ```
 
 ## Generate query
-Inside test:
+Inside test (not used in my thesis anymore):
 ```
 python genquery.py --params configs/gentest.json --len 10 --num 2000 --mode train --out out/queries/inside
 ```
 
-## Builder
-Inside test:
+Assume that you have installed all the datasets, then just run this to generate all queries:
+```sh
+./genall.sh
+```
+
+Will output to folders `out/queries/out2_snr$snr`, where `$snr` is one of -6, -4, -2, 0, 2, 4, 6, 8.
+The query list (used by `matcher.py`) is `out/queries/out2_snr$snr/list.txt`, and the ground truth is `out/queries/out2_snr$snr/expected.csv`.
+
+## Build a fingerprint database
+Inside test (not used in my thesis anymore):
 ```
 python tools/csv2txt.py --dir ../pfann_dataset/fma_medium lists/fma_medium_train.csv --out lists/fma_medium_train.txt
 python builder.py lists/fma_medium_train.txt /path/to/db configs/default.json
@@ -94,19 +102,66 @@ python builder.py lists/fma_medium_train.txt /path/to/db configs/default.json
 
 Usage of `builder.py`:
 ```
-python builder.py <music list> <output db location> <model config>
+python builder.py <music list file> <output database location> <model config>
 ```
+Music list file is a file containing list of music file paths.
+File must be UTF-8 without BOM. For example:
+```
+/path/to/fma_medium/000/000002.mp3
+/path/to/fma_medium/000/000005.mp3
+/path/to/your/music/aaa.wav
+/path/to/your/music/bbb.wav
+```
+Model config is a JSON file like in `configs/` folder.
+It is used to load a trained model.
+If omitted, the model config is `configs/default.json` by default.
 
-## Matcher
-```
-python matcher.py /path/to/query6s/list.txt /path/to/db /path/to/result.txt
-```
-Will output `result.txt`, `result.bin`, and `result_detail.csv` files.
+This program supports both MP3 and WAV audio format.
+Relative paths are supported but not recommended.
 
+## Recognize music
 Usage of `matcher.py`:
 ```
-python matcher.py <query list> <db location> <output result file>
+python matcher.py <query list> <database location> <output result file>
 ```
+
+Query list is a file containing list of query file paths. For example:
+```
+/path/to/queries/out2_snr2/000002.wav
+/path/to/queries/out2_snr2/000005.wav
+/path/to/song_recorded_on_street1.wav
+/path/to/song_recorded_on_street2.wav
+```
+Database location is the place where `builder.py` saves database.
+
+The result file will be a TSV file with 2 fields: query file path, and matched music path, but without header.
+It may look like this:
+```
+/path/to/queries/out2_snr2/000002.wav	/path/to/fma_medium/000/000002.mp3
+/path/to/queries/out2_snr2/000005.wav	/path/to/fma_medium/000/000005.mp3
+/path/to/song_recorded_on_street1.wav	/path/to/your/music/aaa.wav
+/path/to/song_recorded_on_street2.wav	/path/to/your/music/aaa.wav
+```
+
+Matcher will also generate a `_detail.csv` file and a `.bin` file.
+CSV file contains more information about the matches.
+It has 5 columns: query, answer, score, time, and part_scores.
+* query: Query file path
+* answer: Matched music path
+* score: Matching score, used in my thesis
+* time: The time when the query clip starts in the matched music, in seconds
+* part_scores: Mainly used for debugging, currently empty
+
+BIN file contains matching scores of every database music for each query.
+It is used in my ensemble experiments.
+The file format is a flattened 2D array of following structure, without header:
+```c++
+struct match_t {
+  float score; // Matching score
+  float offset; // The time when the query clip starts in the matched music, in seconds
+};
+```
+The matching score of j-th database music in i-th query is at index `i * database size + j`.
 
 ## Evaluation
 ```
