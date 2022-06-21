@@ -10,6 +10,14 @@ import numpy as np
 
 import simpleutils
 
+def set_verbose(index):
+    index = faiss.downcast_index(index)
+    index.verbose = True
+    if isinstance(index, faiss.IndexPreTransform):
+        set_verbose(index.index)
+    elif isinstance(index, faiss.IndexIVF):
+        index.cp.verbose = True
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print('Usage: python %s <db location>' % sys.argv[0])
@@ -30,9 +38,15 @@ if __name__ == "__main__":
 
     # train indexer
     print('training indexer')
-    index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
-    index.verbose = True
+    try:
+        index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
+    except RuntimeError as x:
+        print(x)
+        if 'not implemented for inner prod search' in str(x):
+            index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_L2)
+    tell_me_index_struct(index)
     
+    set_verbose(index)
     if not index.is_trained:
         try:
             index.train(embeddings)
@@ -45,4 +59,6 @@ if __name__ == "__main__":
     # write database
     print('writing database')
     index.add(embeddings)
-    faiss.write_index(index, os.path.join(dir_for_db, 'landmarkValue'))
+    emb_db_path = os.path.join(dir_for_db, 'landmarkValue')
+    faiss.write_index(index, emb_db_path)
+    print('embedding size:', os.stat(emb_db_path).st_size)
