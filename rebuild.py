@@ -11,7 +11,10 @@ import numpy as np
 import simpleutils
 
 def set_verbose(index):
-    index = faiss.downcast_index(index)
+    if isinstance(index, faiss.Index):
+        index = faiss.downcast_index(index)
+    elif isinstance(index, faiss.IndexBinary):
+        index = faiss.downcast_IndexBinary(index)
     index.verbose = True
     if isinstance(index, faiss.IndexPreTransform):
         set_verbose(index.index)
@@ -41,11 +44,12 @@ if __name__ == "__main__":
     try:
         index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
     except RuntimeError as x:
-        print(x)
-        if 'not implemented for inner prod search' in str(x):
+        if 'not implemented for inner prod search' in str(x) or "Error: 'metric == METRIC_L2' failed" in str(x):
+            print(x)
             index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_L2)
-    tell_me_index_struct(index)
-    
+        else:
+            raise
+
     set_verbose(index)
     if not index.is_trained:
         try:

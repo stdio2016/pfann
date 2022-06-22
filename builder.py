@@ -112,7 +112,14 @@ if __name__ == "__main__":
     
     # train indexer
     print('training indexer')
-    index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
+    try:
+        index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_INNER_PRODUCT)
+    except RuntimeError as x:
+        if 'not implemented for inner prod search' in str(x) or "Error: 'metric == METRIC_L2' failed" in str(x):
+            print(x)
+            index = faiss.index_factory(d, params['indexer']['index_factory'], faiss.METRIC_L2)
+        else:
+            raise
     
     embeddings = np.fromfile(os.path.join(dir_for_db, 'embeddings'), dtype=np.float32).reshape([-1, d])
     if not index.is_trained:
