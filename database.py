@@ -22,14 +22,20 @@ if cpp_accelerate:
         POINTER(c_int64),
         c_int,
         POINTER(c_float),
-        c_int,
         c_int
     ]
     mydll.seq_score.restype = c_int
+    mydll.version.restype = c_int64
+    if mydll.version() != 20220621001:
+        print('seqscore.cpp Wrong version! Please recompile')
+        exit(1)
 
 class Database:
     def make_direct_map(self, index):
-        index = faiss.downcast_index(index)
+        if isinstance(index, faiss.Index):
+            index = faiss.downcast_index(index)
+        elif isinstance(index, faiss.IndexBinary):
+            index = faiss.downcast_IndexBinary(index)
         if hasattr(index, 'make_direct_map'):
             index.make_direct_map()
             return True
@@ -56,11 +62,14 @@ class Database:
 
         self.index = faiss.read_index(os.path.join(dir_for_db, 'landmarkValue'))
         try:
-            self.index.reconstruct(0)
+            self.embedding = None
+            if self.index.ntotal > 0:
+                self.index.reconstruct(0)
         except RuntimeError:
             if not self.make_direct_map(self.index):
                 print('This index cannot recover vector')
-            self.index.reconstruct(0)
+                self.embedding = np.fromfile(os.path.join(dir_for_db, 'embeddings'), dtype=np.float32)
+                self.embedding = self.embedding.reshape([-1, self.index.d])
 
         if isinstance(self.index, faiss.IndexIVF):
             print('inverse list count:', self.index.nlist)
@@ -141,25 +150,19 @@ class Database:
         best_song_t = -1, 0
         song_score = np.zeros([self.song_pos.shape[0] - 1, 2], dtype=np.float32)
 
-        for shift in range(self.frame_shift_mul):
-            subquery = np.ascontiguousarray(query[shift::self.frame_shift_mul])
-            sublabel = np.ascontiguousarray(labels[shift::self.frame_shift_mul])
-            song_id = mydll.seq_score(
-                int(self.index.this),
-                self.song_pos.ctypes.data_as(POINTER(c_int64)),
-                self.song_pos.shape[0]-1,
-                subquery.ctypes.data_as(POINTER(c_float)),
-                subquery.shape[0],
-                sublabel.ctypes.data_as(POINTER(c_int64)),
-                self.top_k,
-                song_score.ctypes.data_as(POINTER(c_float)),
-                shift,
-                self.frame_shift_mul
-            )
-            sco = song_score[song_id, 0].item()
-            if sco > best:
-                best = sco
-                best_song_t = song_id, song_score[song_id, 1].item() * self.hop_size / self.frame_shift_mul
+        song_id = mydll.seq_score(
+            int(self.index.this),
+            self.song_pos.ctypes.data_as(POINTER(c_int64)),
+            self.song_pos.shape[0]-1,
+            query.ctypes.data_as(POINTER(c_float)),
+            query.shape[0],
+            labels.ctypes.data_as(POINTER(c_int64)),
+            self.top_k,
+            song_score.ctypes.data_as(POINTER(c_float)),
+            self.frame_shift_mul
+        )
+        best = song_score[song_id, 0].item()
+        best_song_t = song_id, song_score[song_id, 1].item() * self.hop_size / self.frame_shift_mul
         tm_3 = time.time()
         song_score[:, 1] *= self.hop_size / self.frame_shift_mul
         logger.info('search %.6fs rerank %.6fs', tm_2-tm_1, tm_3-tm_2)
