@@ -22,31 +22,56 @@ if cpp_accelerate:
         POINTER(c_int64),
         c_int,
         POINTER(c_float),
-        c_int
+        c_int,
+        c_float
     ]
     mydll.seq_score.restype = c_int
     mydll.version.restype = c_int64
-    if mydll.version() != 20220621001:
+    if mydll.version() != 20220625002:
         print('seqscore.cpp Wrong version! Please recompile')
         exit(1)
 
-class Database:
-    def make_direct_map(self, index):
-        if isinstance(index, faiss.Index):
-            index = faiss.downcast_index(index)
-        elif isinstance(index, faiss.IndexBinary):
-            index = faiss.downcast_IndexBinary(index)
-        if hasattr(index, 'make_direct_map'):
-            index.make_direct_map()
-            return True
-        elif isinstance(index, faiss.IndexPreTransform):
-            return self.make_direct_map(index.index)
-        elif isinstance(index, faiss.IndexFlat):
-            return True
-        else:
-            print(type(index), 'does not support direct map yet!')
-            return False
 
+def make_direct_map(index):
+    if isinstance(index, faiss.Index):
+        index = faiss.downcast_index(index)
+    elif isinstance(index, faiss.IndexBinary):
+        index = faiss.downcast_IndexBinary(index)
+    if hasattr(index, 'make_direct_map'):
+        index.make_direct_map()
+        return True
+    elif isinstance(index, faiss.IndexPreTransform):
+        return make_direct_map(index.index)
+    elif isinstance(index, faiss.IndexFlat):
+        return True
+    else:
+        print(type(index), 'does not support direct map yet!')
+        return False
+
+def set_search_params(index, params):
+    def helper(subindex, subparam):
+        for name in subparam:
+            value = subparam[name]
+            if hasattr(subindex, name):
+                if isinstance(value, dict):
+                    helper(getattr(subindex, name), value)
+                else:
+                    setattr(subindex, name, value)
+            else:
+                print(subindex, 'has no attribute', name)
+    if 'search_params' in params:
+        helper(index, params['search_params'])
+
+    # set nprobes
+    myindex = index
+    if isinstance(myindex, faiss.IndexPreTransform):
+        myindex = faiss.downcast_index(myindex.index)
+    if isinstance(myindex, faiss.IndexIVF):
+        print('inverse list count:', myindex.nlist)
+        myindex.nprobe = params.get('nprobe', 50)
+        print('num probes:', myindex.nprobe)
+
+class Database:
     def __init__(self, dir_for_db, indexer_params, hop_size):
         self.dir_for_db = dir_for_db
         self.params = indexer_params
@@ -66,15 +91,12 @@ class Database:
             if self.index.ntotal > 0:
                 self.index.reconstruct(0)
         except RuntimeError:
-            if not self.make_direct_map(self.index):
+            if not make_direct_map(self.index):
                 print('This index cannot recover vector')
                 self.embedding = np.fromfile(os.path.join(dir_for_db, 'embeddings'), dtype=np.float32)
                 self.embedding = self.embedding.reshape([-1, self.index.d])
 
-        if isinstance(self.index, faiss.IndexIVF):
-            print('inverse list count:', self.index.nlist)
-            self.index.nprobe = self.params.get('nprobe', 50)
-            print('num probes:', self.index.nprobe)
+        set_search_params(self.index, self.params)
         
         if gpu_accelerate and self.params.get('gpu', False):
             co = faiss.GpuMultipleClonerOptions()
@@ -82,6 +104,9 @@ class Database:
             self.gpu_index = faiss.index_cpu_to_all_gpus(self.index, co, 1)
         else:
             self.gpu_index = self.index
+        logger = mp.get_logger()
+        self.score_alpha = self.params.get('score_alpha', 0)
+        logger.info('score alpha: %d', self.score_alpha)
     
     def query_embeddings(self, query):
         if cpp_accelerate:
@@ -159,7 +184,8 @@ class Database:
             labels.ctypes.data_as(POINTER(c_int64)),
             self.top_k,
             song_score.ctypes.data_as(POINTER(c_float)),
-            self.frame_shift_mul
+            self.frame_shift_mul,
+            self.score_alpha
         )
         best = song_score[song_id, 0].item()
         best_song_t = song_id, song_score[song_id, 1].item() * self.hop_size / self.frame_shift_mul

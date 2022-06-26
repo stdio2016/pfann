@@ -26,7 +26,7 @@ int idx_to_song_id(const int64_t *song_pos, int n_songs, int64_t idx) {
 
 extern "C" __declspec(dllexport)
 long long version() {
-    return 20220621001LL;
+    return 20220625002LL;
 }
 
 extern "C" __declspec(dllexport)
@@ -39,7 +39,8 @@ int seq_score(
         const int64_t *labels,
         int top_k,
         float *song_scores,
-        int frame_shift_mul)
+        int frame_shift_mul,
+        float score_alpha)
 {
     const faiss::Index *idx = (faiss::Index *) index;
     const int d = idx->d;
@@ -95,8 +96,17 @@ int seq_score(
                     idx->reconstruct(song_at, my_vec);
                     cache[song_at_hash] = song_at;
                 }
+                float innerprod = 0;
                 for (int k = 0; k < d; k++) {
-                    sco += my_vec[k] * query[query_idx*d + k];
+                    innerprod += my_vec[k] * query[query_idx*d + k];
+                }
+                // reference paper: Query adaptive similarity for large scale object retrieval
+                // by D. Qin, C. Wengert, and L. V. Gool.
+                float l2norm = 1.0f - 1.0f * innerprod;
+                if (score_alpha == 0.0f) {
+                    sco += innerprod;
+                } else if (score_alpha > 0.0f) {
+                    sco += expf(-score_alpha * l2norm * l2norm);
                 }
             }
             sco /= std::max(my_query_len, 1);
