@@ -31,9 +31,29 @@ class SeparableConv2d(Module):
         self.relu2 = get_activation(activation)
         
         self.relu_after_bn = relu_after_bn
+        self.hacked = False
+    
+    # I found a way to do Keras same padding for stride=2 without zero padding layer/function
+    # Just flip the image, then the builtin Conv2d padding will do the right thing
+    def hack(self):
+        self.hacked = not self.hacked
+        with torch.no_grad():
+            self.conv1.weight.set_(self.conv1.weight.flip([2, 3]))
+            self.ln1.weight.set_(self.ln1.weight.flip([1, 2]))
+            self.ln1.bias.set_(self.ln1.bias.flip([1, 2]))
+            self.conv2.weight.set_(self.conv2.weight.flip([2, 3]))
+            self.ln2.weight.set_(self.ln2.weight.flip([1, 2]))
+            self.ln2.bias.set_(self.ln2.bias.flip([1, 2]))
+            if self.hacked:
+                self.conv1.padding = self.pad1.padding[3::-2]
+                self.conv2.padding = self.pad2.padding[3::-2]
+            else:
+                self.conv1.padding = (0,0)
+                self.conv2.padding = (0,0)
     
     def forward(self, x):
-        x = self.pad1(x)
+        if not self.hacked:
+            x = self.pad1(x)
         x = self.conv1(x)
         if self.relu_after_bn:
             x = self.ln1(x)
@@ -41,7 +61,8 @@ class SeparableConv2d(Module):
         else:
             x = self.relu1(x)
             x = self.ln1(x)
-        x = self.pad2(x)
+        if not self.hacked:
+            x = self.pad2(x)
         x = self.conv2(x)
         if self.relu_after_bn:
             x = self.ln2(x)
@@ -73,6 +94,10 @@ class MyF(Module):
         assert in_F==in_T==1, 'output must be 1x1'
         self.convs = ModuleList(convs)
     
+    def hack(self):
+        for conv in self.convs:
+            conv.hack()
+
     def forward(self, x):
         x = x.unsqueeze(1)
         for i, conv in enumerate(self.convs):
@@ -114,8 +139,15 @@ class FpNetwork(Module):
             relu_after_bn=params.get('relu_after_bn', True)
         )
         self.g = MyG(d, h, u)
+        self.hacked = False
+    
+    def hack(self):
+        self.hacked = not self.hacked
+        self.f.hack()
     
     def forward(self, x, norm=True):
+        if self.hacked:
+            x = x.flip([1, 2])
         x = self.f(x)
         x = self.g(x, norm=norm)
         return x
