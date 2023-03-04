@@ -14,7 +14,7 @@ import torch_optimizer as optim
 
 from model import FpNetwork
 from datautil.dataset_v2 import SegmentedDataLoader
-from datautil.mock_data import make_false_data
+from datautil.mock_data import MockedDataLoader
 import simpleutils
 from datautil.specaug import SpecAugment
 
@@ -227,11 +227,12 @@ def test_train(args):
             print('This model has finished training!')
             exit(1)
         print('Load from epoch %d' % (epoch+1))
-        check = torch.load(os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch))
+        check = torch.load(os.path.join(params['model_dir'], 'checkpoint%d.ckpt' % epoch), map_location='cpu')
         model.load_state_dict(check['model'])
         optimizer.load_state_dict(check['optimizer'])
         if 'scaler' in check:
             scaler.load_state_dict(check['scaler'])
+        torch.cuda.empty_cache()
     else:
         shutil.copyfile(args.params, os.path.join(params['model_dir'], 'configs.json'))
     
@@ -246,10 +247,14 @@ def test_train(args):
         print('GPU mem usage: %dMB' % (torch.cuda.memory_allocated()/1024**2))
 
     logger.info('load augmentation data')
-    train_data = SegmentedDataLoader('train', params, num_workers=args.workers)
+    ADataLoader = SegmentedDataLoader
+    if args.mock:
+        ADataLoader = MockedDataLoader
+
+    train_data = ADataLoader('train', params, num_workers=args.workers)
     print('training data contains %d samples' % len(train_data.dataset))
     
-    val_data = SegmentedDataLoader('validate', params, num_workers=args.workers)
+    val_data = ADataLoader('validate', params, num_workers=args.workers)
     val_data.shuffle = False
     val_data.eval_time_shift = True
     print('validation data contains %d samples' % len(val_data.dataset))
@@ -266,6 +271,7 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument('-p', '--params', default='configs/default.json')
     args.add_argument('-w', '--workers', type=int, default=4)
+    args.add_argument('--mock', action='store_true')
     args = args.parse_args()
     logger.info(args)
     test_train(args)
