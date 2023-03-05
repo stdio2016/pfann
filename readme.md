@@ -3,8 +3,25 @@ This is an unofficial reproduction of paper ["Neural Audio Fingerprint for High-
 
 Now I have a thesis that is a "trivial" improvement to the above paper: "Improvement of Neural Network- and Landmark-based Audio Fingerprinting" (in Traditional Chinese). [Link here](thesis.pdf)
 
-Note: I am now employed and our company does not allow GitHub login during work.
-I have less time to work on my side project or maintain my thesis code, and I do not have access to high performance GPU (currently), so I cannot solve compatibility issues or problems related to training.
+Note: I am now employed ~~and our company does not allow GitHub login during work~~.
+I have less time to work on my side project or maintain my thesis code, ~~and I do not have access to high performance GPU (currently), so I cannot solve compatibility issues or problems related to training.~~
+Finally I bought a gaming computer in 2023, now I can help you solve training issues.
+
+## Install
+
+```sh
+conda install python=3.9 # python 3.10 doesn't work with faiss...
+conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia # I forget which version of PyTorch I used, but latest PyTorch seems to work
+conda install -c pytorch faiss-gpu # can also be faiss-cpu if you don't test gpu-accelerated search
+pip install tqdm
+pip install tensorboardX
+pip install torch_optimizer
+pip install scipy
+pip install julius
+pip install matplotlib # for visualization purpose, not needed for server
+pip install seaborn # for visualization purpose, not needed for server
+pip install scikit-learn
+```
 
 ## Prepare dataset
 
@@ -175,3 +192,4 @@ python tools/accuracy.py /path/to/query6s/expected.csv /path/to/result_detail.cs
 ```bash
 python ensemble/svmheatmap2.py out/lm_ out/shift_4_ out/svm lin_acc.csv
 ```
+More info TODO
