@@ -267,6 +267,7 @@ if __name__ == "__main__":
     logger = mp.get_logger()
     logger.info('logger init')
     torch.use_deterministic_algorithms(True)
+    torch.set_num_threads(2)
     mp.set_start_method('spawn')
     args = argparse.ArgumentParser()
     args.add_argument('-p', '--params', default='configs/default.json')
